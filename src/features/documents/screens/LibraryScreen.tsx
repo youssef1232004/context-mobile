@@ -4,8 +4,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import * as FileSystem from 'expo-file-system/legacy';
-import * as Sharing from 'expo-sharing';
 import { useTheme } from '../../../context/ThemeContext';
 import { Badge } from '../../../components/Badge';
 import { CognitiveLoadBadge } from '../../../components/CognitiveLoadBadge';
@@ -113,36 +111,16 @@ export default function LibraryScreen({ navigation }: Props) {
       return;
     }
 
-    const isWordFile = doc.fileType === 'Word' || !!doc.title?.match(/\.(docx?)$/i);
-
-    if (isWordFile) {
-      // Word: Cloudinary URL has no extension — download file first, then share with correct name
-      try {
-        let filename = doc.title.replace(/[^a-zA-Z0-9._-]/g, '_');
-        if (!filename.match(/\.(docx?)$/i)) filename += '.docx';
-        const fileUri = `${FileSystem.cacheDirectory}${filename}`;
-        const result = await FileSystem.downloadAsync(doc.cloudinaryUrl, fileUri);
-        if (result.status === 200 && await Sharing.isAvailableAsync()) {
-          await Sharing.shareAsync(result.uri, {
-            mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-            dialogTitle: `Share "${doc.title}"`,
-          });
-        } else {
-          await Share.share({ message: `"${doc.title}":\n${doc.cloudinaryUrl}` });
-        }
-      } catch {
-        showToast('Share failed', 'error');
-      }
-    } else {
-      // PDF / Image / TextSnippet: URL works fine, share link directly (instant)
-      try {
-        await Share.share({
-          message: `Check out "${doc.title}" on Context:\n${doc.cloudinaryUrl}`,
-          url: doc.cloudinaryUrl,
-        });
-      } catch { /* cancelled */ }
-    }
+    // The Cloudinary URL now includes the correct file extension (e.g. .docx),
+    // so the OS can recognise the file type directly — no local download needed.
+    try {
+      await Share.share({
+        message: `Check out "${doc.title}" on Context:\n${doc.cloudinaryUrl}`,
+        url: doc.cloudinaryUrl,
+      });
+    } catch { /* cancelled */ }
   };
+
 
   const handleRename = async (newName: string) => {
     if (!renameDoc) return;
