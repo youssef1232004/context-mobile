@@ -10,11 +10,11 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from '../context/ThemeContext';
-import { Input } from '../components/Input';
-import { useAppDispatch, useAppSelector } from '../store/hooks';
-import { registerUser, clearError } from '../store/authSlice';
-import { Spacing, BorderRadius, Typography } from '../theme';
+import { useTheme } from '../../../context/ThemeContext';
+import { Input } from '../../../components/Input';
+import { useAppDispatch, useAppSelector } from '../../../store/hooks';
+import { registerUser, clearError } from '../../../store/authSlice';
+import { Spacing, BorderRadius, Typography } from '../../../theme';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 type Props = NativeStackScreenProps<any, 'Register'>;

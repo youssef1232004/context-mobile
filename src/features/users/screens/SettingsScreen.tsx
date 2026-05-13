@@ -2,9 +2,9 @@ import React from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Switch } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from '../context/ThemeContext';
-import { Card } from '../components/Card';
-import { Spacing, BorderRadius, Typography } from '../theme';
+import { useTheme } from '../../../context/ThemeContext';
+import { Card } from '../../../components/Card';
+import { Spacing, BorderRadius, Typography } from '../../../theme';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 type Props = NativeStackScreenProps<any, 'Settings'>;

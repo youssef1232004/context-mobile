@@ -13,15 +13,15 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { useTheme } from '../context/ThemeContext';
-import { Input } from '../components/Input';
-import { Card } from '../components/Card';
-import { Button } from '../components/Button';
-import { useAppDispatch, useAppSelector } from '../store/hooks';
-import { updateProfile, logout } from '../store/authSlice';
-import { authService } from '../features/auth/api/authService';
+import { useTheme } from '../../../context/ThemeContext';
+import { Input } from '../../../components/Input';
+import { Card } from '../../../components/Card';
+import { Button } from '../../../components/Button';
+import { useAppDispatch, useAppSelector } from '../../../store/hooks';
+import { updateProfile, logout } from '../../../store/authSlice';
+import { authService } from '../../../features/auth/api/authService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Spacing, BorderRadius, Typography } from '../theme';
+import { Spacing, BorderRadius, Typography } from '../../../theme';
 
 const PERSONAS = [
   { id: 'general', label: 'General' },

@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { secureStorage } from '../services/secureStorage';
 import { authService } from '../features/auth/api/authService';
 import type {
   LoginFormValues,
@@ -39,8 +39,8 @@ export const loginUser = createAsyncThunk(
   async (credentials: LoginFormValues, { rejectWithValue }) => {
     try {
       const data = await authService.login(credentials);
-      await AsyncStorage.setItem('context_token', data.token);
-      await AsyncStorage.setItem('context_user', JSON.stringify(data.user));
+      await secureStorage.setToken(data.token);
+      await secureStorage.setUser(data.user);
       return data;
     } catch (error: unknown) {
       return rejectWithValue(getErrorMessage(error, 'Login failed'));
@@ -53,8 +53,8 @@ export const registerUser = createAsyncThunk(
   async (userData: RegisterFormValues, { rejectWithValue }) => {
     try {
       const data = await authService.register(userData);
-      await AsyncStorage.setItem('context_token', data.token);
-      await AsyncStorage.setItem('context_user', JSON.stringify(data.user));
+      await secureStorage.setToken(data.token);
+      await secureStorage.setUser(data.user);
       return data;
     } catch (error: unknown) {
       return rejectWithValue(getErrorMessage(error, 'Registration failed'));
@@ -68,7 +68,7 @@ export const updateProfile = createAsyncThunk(
     try {
       const data = await authService.updateProfile(userData);
       const updatedUser = data.data;
-      await AsyncStorage.setItem('context_user', JSON.stringify(updatedUser));
+      await secureStorage.setUser(updatedUser);
       return updatedUser;
     } catch (error: unknown) {
       return rejectWithValue(getErrorMessage(error, 'Failed to update profile'));
@@ -80,10 +80,9 @@ export const restoreSession = createAsyncThunk(
   'auth/restoreSession',
   async (_, { rejectWithValue }) => {
     try {
-      const token = await AsyncStorage.getItem('context_token');
-      const userStr = await AsyncStorage.getItem('context_user');
-      if (token && userStr) {
-        const user = JSON.parse(userStr) as AuthUser;
+      const token = await secureStorage.getToken();
+      const user = await secureStorage.getUser<AuthUser>();
+      if (token && user) {
         return { token, user };
       }
       return null;
@@ -111,8 +110,8 @@ const authSlice = createSlice({
       state.token = null;
       state.isAuthenticated = false;
       state.status = 'idle';
-      AsyncStorage.removeItem('context_token');
-      AsyncStorage.removeItem('context_user');
+      // Fire-and-forget: clear secure store
+      secureStorage.clearAll();
     },
     clearError: (state) => {
       state.error = null;

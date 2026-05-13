@@ -22,7 +22,6 @@ export const Colors = {
     bg: '#0b0b0d',
     surface: '#18181b',
     primary: '#8b5cf6',
-    secondary: '#3b82f6',
     accent: '#ff7e5f',
     text: '#e0e0e6',
     textSecondary: 'rgba(224, 224, 230, 0.6)',
