@@ -29,8 +29,8 @@
 
 <br/>
 
-[![Context API](https://img.shields.io/badge/🔗_Paired_With-Context_API-4F46E5?style=flat-square)](../context-api/README.md)
-[![Context Web Frontend](https://img.shields.io/badge/🔗_Paired_With-Context_Web-61DAFB?style=flat-square)](../context-mvp-front/README.md)
+[![Context API](https://img.shields.io/badge/🔗_Paired_With-Context_API-4F46E5?style=flat-square)](https://github.com/Ahmed-ElKashif/Context-api)
+[![Context Web Frontend](https://img.shields.io/badge/🔗_Paired_With-Context_Web-61DAFB?style=flat-square)](https://github.com/youssef1232004/context-mvp-front)
 
 </div>
 
@@ -52,7 +52,7 @@
 
 ## 🌐 What is Context Mobile?
 
-**Context** is an AI-native personal knowledge base. This repository is the **React Native / Expo mobile app** — bringing your second brain to your pocket. It connects to the [Context API](../context-api/README.md) to provide:
+**Context** is an AI-native personal knowledge base. This repository is the **React Native / Expo mobile app** — bringing your second brain to your pocket. It connects to the [Context API](https://github.com/Ahmed-ElKashif/Context-api) to provide:
 
 - A **Smart Library** for managing and exploring all your documents on the go
 - A **Document Reader** with an AI-powered contextual summary and RAG chat
@@ -167,7 +167,7 @@ The core data layer for the entire library:
 ### Prerequisites
 - Node.js ≥ 18.x
 - Expo Go app on your physical device, OR an iOS Simulator / Android Emulator
-- The [Context API](../context-api/README.md) running locally on port `5000`
+- The [Context API](https://github.com/Ahmed-ElKashif/Context-api) running locally on port `5000`
 
 ### 1. Install Dependencies
 
