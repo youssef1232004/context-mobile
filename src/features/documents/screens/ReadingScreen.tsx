@@ -6,8 +6,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
+import Markdown from 'react-native-markdown-display';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
+import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../../context/ThemeContext';
 import { Card } from '../../../components/Card';
 import { Badge } from '../../../components/Badge';
@@ -17,13 +19,16 @@ import { Toast } from '../../../components/Toast';
 import { useToast } from '../../../hooks/useToast';
 import { documentService, type Document } from '../api/documentService';
 import { api } from '../../../services/api';
+import { secureStorage } from '../../../services/secureStorage';
 import { Spacing, Typography, BorderRadius } from '../../../theme';
+import { ExcelViewer } from '../components/viewers/ExcelViewer';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 type Props = NativeStackScreenProps<any, 'Reading'>;
 
 interface ChatMessage {
-  role: 'user' | 'assistant';
+  // Backend returns role 'ai' for assistant messages — we normalise to 'assistant' on read
+  role: 'user' | 'assistant' | 'ai';
   content: string;
 }
 
@@ -49,8 +54,25 @@ export default function ReadingScreen({ route, navigation }: Props) {
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
   const [historyLoaded, setHistoryLoaded] = useState(false);
+  const [reanalyzing, setReanalyzing] = useState(false);
   const chatScrollRef = useRef<ScrollView>(null);
   const panelHeight = useRef(new Animated.Value(0)).current;
+
+  // Bug #8: Reset ALL local state when documentId changes to prevent stale content bleed-through.
+  // Without this, opening a Word doc and then an Image would show the Word doc's extracted text.
+  useEffect(() => {
+    setDoc(null);
+    setLoading(true);
+    setError(null);
+    setViewMode('content');
+    setMessages([]);
+    setChatInput('');
+    setChatLoading(false);
+    setChatOpen(false);
+    setHistoryLoaded(false);
+    setDownloading(false);
+    setReanalyzing(false);
+  }, [documentId]);
 
   useEffect(() => {
     if (!documentId) { setError('No document selected.'); setLoading(false); return; }
@@ -73,9 +95,11 @@ export default function ReadingScreen({ route, navigation }: Props) {
     if (chatOpen && !historyLoaded && documentId) {
       (async () => {
         try {
-          const res = await api.get(`/ai/chat/${documentId}`);
+          const res = await api.get(`/documents/${documentId}/chat`);
           const history = (res.data?.data || []).map((m: any) => ({
-            role: m.role, content: m.content,
+            // Normalise backend's 'ai' role to 'assistant' for consistent bubble rendering
+            role: (m.role === 'ai' ? 'assistant' : m.role) as ChatMessage['role'],
+            content: m.content,
           }));
           setMessages(history);
         } catch { /* no history yet */ }
@@ -144,9 +168,27 @@ export default function ReadingScreen({ route, navigation }: Props) {
   };
 
   // ── Chat ──
+  const handleReanalyze = async () => {
+    if (!doc) return;
+    setReanalyzing(true);
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      await documentService.reanalyze(doc._id);
+      showToast('Re-analysis started', 'success');
+      // Refresh the document to show 'Processing' status
+      const res = await documentService.getById(doc._id);
+      setDoc(res.data || res);
+    } catch {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      showToast('Failed to start re-analysis', 'error');
+    } finally {
+      setReanalyzing(false);
+    }
+  };
+
   const sendMessage = async () => {
     const msg = chatInput.trim();
-    if (!msg || chatLoading) return;
+    if (!msg || chatLoading || !doc) return;
     Keyboard.dismiss();
     setChatInput('');
     setMessages((prev) => [...prev, { role: 'user', content: msg }]);
@@ -154,17 +196,31 @@ export default function ReadingScreen({ route, navigation }: Props) {
     setTimeout(() => chatScrollRef.current?.scrollToEnd({ animated: true }), 100);
 
     try {
-      const res = await api.post('/ai/chat', { documentId, message: msg });
-      const data = res.data?.data;
-      let reply = data?.reply || 'No response from AI.';
-      if (data?.insights?.length) reply += '\n\n💡 Insights:\n• ' + data.insights.join('\n• ');
-      if (data?.riskWarnings?.length) reply += '\n\n⚠️ Warnings:\n• ' + data.riskWarnings.join('\n• ');
-      setMessages((prev) => [...prev, { role: 'assistant', content: reply }]);
-    } catch {
+      const baseUrl = (api.defaults.baseURL || '').replace(/\/+$/, '');
+      const token = await secureStorage.getToken();
+
+      // Bug #4: Backend /documents/:id/chat returns plain JSON { data: { role: 'ai', content } }
+      // NOT a stream. The old getReader() approach was causing the immediate failure.
+      const response = await fetch(`${baseUrl}/documents/${documentId}/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ message: msg }),
+      });
+
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+      const json = await response.json();
+      // Backend: { success: true, data: { role: 'ai', content: aiResponse } }
+      const aiContent = json?.data?.content || json?.content || 'No response received.';
+      setMessages((prev) => [...prev, { role: 'assistant', content: aiContent }]);
+    } catch (e) {
       setMessages((prev) => [...prev, { role: 'assistant', content: 'Failed to get response. Please try again.' }]);
     } finally {
       setChatLoading(false);
-      setTimeout(() => chatScrollRef.current?.scrollToEnd({ animated: true }), 100);
+      setTimeout(() => chatScrollRef.current?.scrollToEnd({ animated: true }), 150);
     }
   };
 
@@ -172,14 +228,72 @@ export default function ReadingScreen({ route, navigation }: Props) {
   const isImage = doc?.fileType === 'Image' || !!doc?.title?.match(/\.(jpg|jpeg|png|gif|webp)$/i);
   const isPDF = doc?.fileType === 'PDF' || !!doc?.title?.match(/\.pdf$/i);
   const isWord = doc?.fileType === 'Word' || !!doc?.title?.match(/\.(docx?)$/i);
-  const isDocx = isWord && !doc?.title?.match(/\.doc$/i); // true for .docx, false for old .doc
+  const isDocx = isWord && !doc?.title?.match(/\.doc$/i);
+  const isExcel = !!doc?.title?.match(/\.(xlsx?|xls)$/i) || doc?.fileType === 'Excel';
   const isText = doc?.fileType === 'TextSnippet';
   const textContent = doc?.extractedText || doc?.summary;
 
-  // PDF viewer URL — use Google Docs viewer for reliable in-app rendering
+  // PDF viewer URL
   const pdfViewerUrl = doc?.cloudinaryUrl
     ? `https://docs.google.com/gview?embedded=true&url=${encodeURIComponent(doc.cloudinaryUrl)}`
     : null;
+
+  // Bug #11: Excel HTML renderer using xlsx CDN inside WebView
+  const getExcelHtml = (fileUrl: string) => {
+    const bg = isDark ? '#0f0f11' : '#ffffff';
+    const fg = isDark ? '#e0e0e6' : '#1a1a2e';
+    const headerBg = isDark ? '#1a1a2e' : '#f5f5f5';
+    const borderColor = isDark ? '#333' : '#ddd';
+    const accent = '#6366f1';
+    return `<!DOCTYPE html>
+<html><head><meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:${bg}; color:${fg}; font-family:-apple-system,system-ui,sans-serif; padding:12px; }
+  #loading { text-align:center; padding:60px 20px; color:${accent}; font-weight:700; }
+  #error { text-align:center; padding:40px; color:#ef4444; font-weight:700; }
+  .sheet-name { font-size:12px; font-weight:800; color:${accent}; text-transform:uppercase; letter-spacing:1px; margin-bottom:8px; margin-top:16px; }
+  .sheet-name:first-child { margin-top:0; }
+  .tbl-wrap { overflow-x:auto; border-radius:10px; border:1px solid ${borderColor}; margin-bottom:16px; }
+  table { border-collapse:collapse; width:100%; font-size:12px; }
+  th { background:${headerBg}; font-weight:700; color:${fg}; padding:8px 10px; border:1px solid ${borderColor}; white-space:nowrap; }
+  td { padding:6px 10px; border:1px solid ${borderColor}; color:${fg}; white-space:nowrap; }
+  tr:nth-child(even) td { background:${isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)'}; }
+</style></head><body>
+<div id="loading">Parsing spreadsheet…</div>
+<div id="error" style="display:none"></div>
+<div id="content" style="display:none"></div>
+<script>
+(async()=>{
+  try {
+    const res = await fetch("${fileUrl}");
+    const buf = await res.arrayBuffer();
+    const wb = XLSX.read(buf, { type: 'array' });
+    const container = document.getElementById('content');
+    wb.SheetNames.forEach(name => {
+      const ws = wb.Sheets[name];
+      const html = XLSX.utils.sheet_to_html(ws, { id: 'tbl_' + name.replace(/\\s/g,'_'), editable: false });
+      const label = document.createElement('div');
+      label.className = 'sheet-name';
+      label.textContent = name;
+      const wrap = document.createElement('div');
+      wrap.className = 'tbl-wrap';
+      wrap.innerHTML = html;
+      container.appendChild(label);
+      container.appendChild(wrap);
+    });
+    document.getElementById('loading').style.display='none';
+    container.style.display='block';
+  } catch(e) {
+    document.getElementById('loading').style.display='none';
+    const err = document.getElementById('error');
+    err.style.display='block';
+    err.textContent = 'Failed to parse spreadsheet: ' + e.message;
+  }
+})();
+</script></body></html>`;
+  };
 
   // Mammoth WebView HTML for rendering .docx in-app
   const getMammothHtml = (fileUrl: string) => {
@@ -229,7 +343,12 @@ export default function ReadingScreen({ route, navigation }: Props) {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
       <Toast {...toast} onHide={hideToast} />
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      {/* Bug #6: keyboardVerticalOffset stops the keyboard from hiding the input */}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+      >
         {/* ── Navbar ── */}
         <View style={{
           flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
@@ -239,9 +358,20 @@ export default function ReadingScreen({ route, navigation }: Props) {
           <TouchableOpacity onPress={() => navigation.goBack()} style={{ padding: 4 }}>
             <Ionicons name="arrow-back" size={22} color={colors.text} />
           </TouchableOpacity>
-          <Text style={{ fontSize: Typography.sizes.base, fontWeight: '700', color: colors.text, flex: 1 }} numberOfLines={1}>
-            {loading ? 'Loading…' : (doc?.title || 'Document')}
-          </Text>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: Typography.sizes.base, fontWeight: '700', color: colors.text }} numberOfLines={1}>
+              {loading ? 'Loading…' : (doc?.title || 'Document')}
+            </Text>
+            {doc?.aiStatus && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                <View style={{
+                  width: 6, height: 6, borderRadius: 3,
+                  backgroundColor: doc.aiStatus === 'Analyzed' ? '#10b981' : doc.aiStatus === 'Failed' ? '#ef4444' : '#f59e0b'
+                }} />
+                <Text style={{ fontSize: 11, color: colors.textSecondary, fontWeight: '500' }}>{doc.aiStatus}</Text>
+              </View>
+            )}
+          </View>
 
           {/* Download button */}
           {doc?.cloudinaryUrl && (
@@ -249,6 +379,16 @@ export default function ReadingScreen({ route, navigation }: Props) {
               {downloading
                 ? <ActivityIndicator size="small" color={colors.primary} />
                 : <Ionicons name="download-outline" size={18} color={colors.primary} />
+              }
+            </TouchableOpacity>
+          )}
+
+          {/* Reanalyze button */}
+          {doc?.aiStatus === 'Failed' && (
+            <TouchableOpacity onPress={handleReanalyze} disabled={reanalyzing} style={{ padding: 4 }}>
+              {reanalyzing
+                ? <ActivityIndicator size="small" color="#ef4444" />
+                : <Ionicons name="refresh-circle" size={20} color="#ef4444" />
               }
             </TouchableOpacity>
           )}
@@ -343,6 +483,9 @@ export default function ReadingScreen({ route, navigation }: Props) {
                   </View>
                 )}
               />
+            ) : isExcel ? (
+              // ── Excel: native Grid/Charts viewer ──
+              <ExcelViewer extractedText={doc.extractedText || doc.summary || ''} />
             ) : (
               // .doc (legacy) or unknown — fallback with download
               <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: Spacing['2xl'], gap: Spacing.lg }}>
@@ -483,12 +626,23 @@ export default function ReadingScreen({ route, navigation }: Props) {
                   ? colors.primary
                   : (isDark ? 'rgba(255,255,255,0.08)' : '#e8e8ec'),
               }}>
-                <Text style={{
-                  fontSize: 13, lineHeight: 19, fontWeight: '500',
-                  color: m.role === 'user' ? (isDark ? '#000' : '#fff') : colors.text,
-                }}>
-                  {m.content}
-                </Text>
+                {/* Bug #6: Markdown for AI messages in ReadingScreen */}
+                {m.role === 'user' ? (
+                  <Text style={{ fontSize: 13, lineHeight: 19, fontWeight: '500', color: isDark ? '#000' : '#fff' }}>
+                    {m.content}
+                  </Text>
+                ) : (
+                  <Markdown style={{
+                    body: { color: colors.text, fontSize: 13, lineHeight: 19 },
+                    paragraph: { color: colors.text, fontSize: 13, lineHeight: 19, marginBottom: 2 },
+                    bullet_list: { marginBottom: 2 },
+                    list_item: { color: colors.text, fontSize: 13 },
+                    strong: { fontWeight: '700' as const, color: colors.text },
+                    code_inline: { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#f3f4f6', borderRadius: 4, fontSize: 12, color: colors.primary },
+                  }}>
+                    {m.content}
+                  </Markdown>
+                )}
               </View>
             ))}
             {chatLoading && (

@@ -8,6 +8,19 @@ import { restoreSession } from '../store/authSlice';
 import type { RootState } from '../store/store';
 import AuthStack from './AuthStack';
 import MainTabNavigator from './MainTabNavigator';
+import ProfileStack from './ProfileStack';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+
+const Stack = createNativeStackNavigator();
+
+function AppStack() {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="MainTabs" component={MainTabNavigator} />
+      <Stack.Screen name="Profile" component={ProfileStack} />
+    </Stack.Navigator>
+  );
+}
 
 export default function RootNavigator() {
   const { colors } = useTheme();
@@ -33,7 +46,7 @@ export default function RootNavigator() {
 
   return (
     <NavigationContainer>
-      {isAuthenticated ? <MainTabNavigator /> : <AuthStack />}
+      {isAuthenticated ? <AppStack /> : <AuthStack />}
     </NavigationContainer>
   );
 }

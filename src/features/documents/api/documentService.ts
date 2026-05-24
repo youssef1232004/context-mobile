@@ -19,6 +19,9 @@ export interface Document {
   folder: string | null;
   originalClientPath?: string;
   semanticPath?: string;
+  /** Whether the user has opened this document since it was uploaded (used by SuggestedFocusService scoring) */
+  isUnread?: boolean;
+  isOrganized?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -102,6 +105,52 @@ export const documentService = {
   /** DELETE /documents/bulk */
   bulkDelete: async (ids: string[]) => {
     const response = await api.delete('/documents/bulk', { data: { ids } });
+    return response.data;
+  },
+
+  /**
+   * GET /documents/suggested-focus
+   * Returns the top-2 documents ranked by the backend's SuggestedFocusService:
+   * score = cognitiveLoad (Heavy=3, Medium=2, Light=1) + recency decay (30-day window) + isUnread bonus (+2)
+   * Only surfaces documents with aiStatus === 'Analyzed'.
+   */
+  getSuggestedFocus: async (): Promise<{ success: boolean; count: number; data: Document[] }> => {
+    const response = await api.get('/documents/suggested-focus');
+    return response.data;
+  },
+
+  generateFolderStructure: async (payload: { documents: any[]; folderIds?: string[] }) => {
+    const response = await api.post('/ai/organize-folder', payload);
+    return response.data;
+  },
+
+  proposeGlobalFolderStructure: async () => {
+    const response = await api.post('/folders/propose');
+    return response.data;
+  },
+
+  applySemanticFolders: async (updates: any[]) => {
+    const response = await api.put('/folders/semantic', { updates });
+    return response.data;
+  },
+
+  synthesize: async (documentIds: string[]) => {
+    const response = await api.post('/ai/synthesize', { documentIds });
+    return response.data;
+  },
+
+  reanalyze: async (id: string) => {
+    const response = await api.post(`/documents/${id}/reanalyze`);
+    return response.data;
+  },
+
+  getStatus: async (ids: string[]) => {
+    const response = await api.get('/documents/status', { params: { ids: ids.join(',') } });
+    return response.data;
+  },
+
+  applySemanticFolders: async (updates: { documentId: string, newPath: string }[]) => {
+    const response = await api.put('/ai/apply-folders', { updates });
     return response.data;
   },
 };

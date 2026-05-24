@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
+import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../../context/ThemeContext';
 import { Card } from '../../../components/Card';
 import { Button } from '../../../components/Button';
@@ -81,13 +82,28 @@ export default function CaptureScreen() {
         multiple: true,
       });
       if (result.canceled || !result.assets?.length) return;
-      const files = result.assets.map((a) => ({
-        name: a.name,
-        uri: a.uri,
-        mimeType: a.mimeType || 'application/octet-stream',
-        size: a.size,
-      }));
-      setPickedFiles((prev) => [...prev, ...files]);
+      const files = result.assets
+        .filter(a => {
+          if (a.size && a.size > 10 * 1024 * 1024) {
+            showToast(`File too large: ${a.name}. Max 10 MB.`, 'error');
+            return false;
+          }
+          return true;
+        })
+        .map((a) => ({
+          name: a.name,
+          uri: a.uri,
+          mimeType: a.mimeType || 'application/octet-stream',
+          size: a.size,
+        }));
+      setPickedFiles((prev) => {
+        const newFiles = [...prev, ...files];
+        if (newFiles.length > 5) {
+          showToast('Maximum 5 files per upload.', 'warning');
+          return newFiles.slice(0, 5);
+        }
+        return newFiles;
+      });
     } catch {
       showToast('Failed to pick document', 'error');
     }
@@ -106,13 +122,24 @@ export default function CaptureScreen() {
       });
       if (result.canceled || !result.assets?.[0]) return;
       const asset = result.assets[0];
+      if (asset.fileSize && asset.fileSize > 10 * 1024 * 1024) {
+        showToast(`Image too large. Max 10 MB.`, 'error');
+        return;
+      }
       const name = asset.fileName || `photo_${Date.now()}.jpg`;
-      setPickedFiles((prev) => [...prev, {
-        name,
-        uri: asset.uri,
-        mimeType: asset.mimeType || 'image/jpeg',
-        size: asset.fileSize,
-      }]);
+      setPickedFiles((prev) => {
+        const newFiles = [...prev, {
+          name,
+          uri: asset.uri,
+          mimeType: asset.mimeType || 'image/jpeg',
+          size: asset.fileSize,
+        }];
+        if (newFiles.length > 5) {
+          showToast('Maximum 5 files per upload.', 'warning');
+          return newFiles.slice(0, 5);
+        }
+        return newFiles;
+      });
       setMode('file'); // switch to file view to show the picked image
     } catch {
       showToast('Camera capture failed', 'error');
@@ -132,13 +159,28 @@ export default function CaptureScreen() {
         quality: 0.8,
       });
       if (result.canceled || !result.assets?.length) return;
-      const files = result.assets.map((a) => ({
-        name: a.fileName || `image_${Date.now()}.jpg`,
-        uri: a.uri,
-        mimeType: a.mimeType || 'image/jpeg',
-        size: a.fileSize,
-      }));
-      setPickedFiles((prev) => [...prev, ...files]);
+      const files = result.assets
+        .filter(a => {
+          if (a.fileSize && a.fileSize > 10 * 1024 * 1024) {
+            showToast(`Image too large: ${a.fileName || 'Unknown'}. Max 10 MB.`, 'error');
+            return false;
+          }
+          return true;
+        })
+        .map((a) => ({
+          name: a.fileName || `image_${Date.now()}.jpg`,
+          uri: a.uri,
+          mimeType: a.mimeType || 'image/jpeg',
+          size: a.fileSize,
+        }));
+      setPickedFiles((prev) => {
+        const newFiles = [...prev, ...files];
+        if (newFiles.length > 5) {
+          showToast('Maximum 5 files per upload.', 'warning');
+          return newFiles.slice(0, 5);
+        }
+        return newFiles;
+      });
       setMode('file');
     } catch {
       showToast('Gallery selection failed', 'error');
@@ -165,10 +207,12 @@ export default function CaptureScreen() {
       });
 
       await documentService.uploadWithProgress(formData, (pct) => setUploadProgress(pct));
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       showToast(`${pickedFiles.length} file${pickedFiles.length > 1 ? 's' : ''} uploaded!`, 'success');
       setPickedFiles([]);
       setUploadProgress(0);
     } catch (err: any) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       const msg = err?.response?.data?.message || err?.response?.data?.error || 'Upload failed. Please try again.';
       showToast(msg, 'error');
     } finally {
@@ -181,11 +225,13 @@ export default function CaptureScreen() {
     setIsUploading(true);
     try {
       await documentService.uploadText(pasteText.trim(), textTitle.trim() || undefined);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       showToast('Text snippet saved!', 'success');
       setPasteText('');
       setTextTitle('');
       Keyboard.dismiss();
     } catch (err: any) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       const msg = err?.response?.data?.message || 'Failed to save text snippet.';
       showToast(msg, 'error');
     } finally {

@@ -16,6 +16,7 @@ import { Card } from '../../../components/Card';
 import { Badge } from '../../../components/Badge';
 import { CognitiveLoadBadge } from '../../../components/CognitiveLoadBadge';
 import { SkeletonLoader } from '../../../components/SkeletonLoader';
+import { AnimatedPressable } from '../../../components/AnimatedPressable';
 import { documentService, type Document } from '../../documents/api/documentService';
 import { folderService, type FolderData } from '../../folders/api/folderService';
 import { Spacing, Typography, BorderRadius } from '../../../theme';
@@ -26,6 +27,8 @@ const CARD_WIDTH = Dimensions.get('window').width * 0.42;
 const FILE_ICONS: Record<string, { name: React.ComponentProps<typeof Ionicons>['name']; color: string }> = {
   PDF:         { name: 'document-text', color: '#ef4444' },
   Word:        { name: 'document',      color: '#3b82f6' },
+  Excel:       { name: 'grid',          color: '#10b981' },
+  CSV:         { name: 'grid',          color: '#10b981' },
   Image:       { name: 'image',         color: '#8b5cf6' },
   TextSnippet: { name: 'reader',        color: '#f59e0b' },
 };
@@ -36,6 +39,7 @@ export default function HomeScreen() {
   const navigation = useNavigation<any>();
 
   const [documents, setDocuments] = useState<Document[]>([]);
+  const [focusDoc, setFocusDoc] = useState<Document | null>(null);
   const [folderCount, setFolderCount] = useState(0);
   const [totalDocs, setTotalDocs] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -44,13 +48,18 @@ export default function HomeScreen() {
   const fetchData = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     try {
-      const [docRes, treeRes] = await Promise.all([
+      const [docRes, treeRes, focusRes] = await Promise.all([
         documentService.getAll({ limit: 10, sortBy: 'updatedAt', sortOrder: 'desc' }),
         folderService.getTree(),
+        // GET /documents/suggested-focus: backend ranks by cognitiveLoad weight +
+        // 30-day recency decay + isUnread bonus (+2). Only returns Analyzed docs.
+        documentService.getSuggestedFocus(),
       ]);
       setDocuments(docRes.data || []);
       setTotalDocs(docRes.pagination?.totalItems ?? docRes.data?.length ?? 0);
       setFolderCount(treeRes.data?.length ?? 0);
+      // Take the top-ranked document from the AI-scored list
+      setFocusDoc(focusRes.data?.[0] ?? null);
     } catch {
       // silent fail — screen still shows empty states
     } finally {
@@ -62,11 +71,6 @@ export default function HomeScreen() {
   useEffect(() => { fetchData(); }, []);
 
   const onRefresh = () => { setRefreshing(true); fetchData(true); };
-
-  // Pick a suggested focus document — prefer Heavy/Medium load
-  const focusDoc = documents.find((d) => d.cognitiveLoad === 'Heavy')
-    || documents.find((d) => d.cognitiveLoad === 'Medium')
-    || documents[0];
 
   const getIcon = (ft: string) => FILE_ICONS[ft] || { name: 'document-outline' as const, color: colors.textSecondary };
 
@@ -88,14 +92,22 @@ export default function HomeScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
       >
         {/* ─── Greeting ─── */}
-        <View>
-          <Text style={{ fontSize: Typography.sizes.sm, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1.5 }}>
-            Dashboard
-          </Text>
-          <Text style={{ fontSize: Typography.sizes['3xl'], fontWeight: '800', color: colors.text, marginTop: 4 }}>
-            Welcome back,{'\n'}
-            <Text style={{ color: colors.primary }}>{user?.fullName || 'User'}</Text>
-          </Text>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <View>
+            <Text style={{ fontSize: Typography.sizes.sm, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1.5 }}>
+              Dashboard
+            </Text>
+            <Text style={{ fontSize: Typography.sizes['3xl'], fontWeight: '800', color: colors.text, marginTop: 4 }}>
+              Welcome back,{'\n'}
+              <Text style={{ color: colors.primary }}>{user?.fullName || 'User'}</Text>
+            </Text>
+          </View>
+          <TouchableOpacity 
+            onPress={() => navigation.navigate('Profile')}
+            style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : colors.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.05)' : colors.border }}
+          >
+            <Ionicons name="person" size={20} color={colors.primary} />
+          </TouchableOpacity>
         </View>
 
         {/* ─── Stats Row ─── */}
@@ -122,8 +134,8 @@ export default function HomeScreen() {
         {loading ? (
           <SkeletonLoader count={1} type="card" />
         ) : focusDoc ? (
-          <TouchableOpacity
-            activeOpacity={0.8}
+          <AnimatedPressable
+            scaleTo={0.98}
             onPress={() => navigation.navigate('Library', { screen: 'Reading', params: { documentId: focusDoc._id } })}
           >
             <Card
@@ -180,7 +192,7 @@ export default function HomeScreen() {
                 )}
               </View>
             </Card>
-          </TouchableOpacity>
+          </AnimatedPressable>
         ) : (
           <Card>
             <View style={{ alignItems: 'center', gap: Spacing.md, paddingVertical: Spacing.xl }}>
@@ -209,11 +221,15 @@ export default function HomeScreen() {
               showsHorizontalScrollIndicator={false}
               keyExtractor={(item) => item._id}
               contentContainerStyle={{ gap: Spacing.md }}
+              windowSize={5}
+              initialNumToRender={4}
+              maxToRenderPerBatch={4}
+              removeClippedSubviews={true}
               renderItem={({ item }) => {
                 const ic = getIcon(item.fileType);
                 return (
-                  <TouchableOpacity
-                    activeOpacity={0.8}
+                  <AnimatedPressable
+                    scaleTo={0.96}
                     onPress={() => navigation.navigate('Library', { screen: 'Reading', params: { documentId: item._id } })}
                     style={{
                       width: CARD_WIDTH,
@@ -240,7 +256,7 @@ export default function HomeScreen() {
                     <Text style={{ fontSize: 11, fontWeight: '500', color: colors.textSecondary }}>
                       {relativeDate(item.updatedAt)}
                     </Text>
-                  </TouchableOpacity>
+                  </AnimatedPressable>
                 );
               }}
             />

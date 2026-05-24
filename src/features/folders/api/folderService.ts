@@ -51,6 +51,12 @@ export const folderService = {
     return response.data;
   },
 
+  /** GET /folders/:id/download — download folder as zip */
+  downloadFolder: async (folderId: string) => {
+    const response = await api.get(`/folders/${folderId}/download`, { responseType: 'blob' });
+    return response.data;
+  },
+
   /** POST /folders — create a folder */
   create: async (payload: { name: string; parentFolder?: string }) => {
     const response = await api.post('/folders', payload);

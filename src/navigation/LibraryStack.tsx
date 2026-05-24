@@ -10,7 +10,7 @@ const Stack = createNativeStackNavigator();
 export default function LibraryStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="Library" component={LibraryScreen} />
+      <Stack.Screen name="LibraryMain" component={LibraryScreen} />
       <Stack.Screen name="Reading" component={ReadingScreen} />
       <Stack.Screen name="Compare" component={CompareScreen} />
       <Stack.Screen name="FolderProposal" component={FolderProposalScreen} />
