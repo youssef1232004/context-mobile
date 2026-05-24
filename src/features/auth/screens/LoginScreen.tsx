@@ -137,6 +137,15 @@ export default function LoginScreen({ navigation }: Props) {
                 icon={<Ionicons name="key-outline" size={18} color={colors.primary} />}
               />
 
+              <TouchableOpacity
+                onPress={() => navigation.navigate('ForgotPassword')}
+                style={{ alignSelf: 'flex-end', marginTop: -Spacing.sm }}
+              >
+                <Text style={{ color: colors.primary, fontSize: Typography.sizes.sm, fontWeight: '600' }}>
+                  Forgot Access Key?
+                </Text>
+              </TouchableOpacity>
+
               {error && (
                 <View
                   style={{

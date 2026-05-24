@@ -7,7 +7,7 @@ import HomeScreen from '../features/home/screens/HomeScreen';
 import LibraryStack from './LibraryStack';
 import CaptureScreen from '../features/documents/screens/CaptureScreen';
 import SearchScreen from '../features/search/screens/SearchScreen';
-import ProfileStack from './ProfileStack';
+import CompareScreen from '../features/comparison/screens/CompareScreen';
 
 const Tab = createBottomTabNavigator();
 
@@ -18,7 +18,7 @@ const TAB_ICONS: Record<string, { focused: IoniconsName; default: IoniconsName }
   Library: { focused: 'library', default: 'library-outline' },
   Capture: { focused: 'add-circle', default: 'add-circle-outline' },
   Search: { focused: 'search', default: 'search-outline' },
-  Profile: { focused: 'person', default: 'person-outline' },
+  Compare: { focused: 'git-compare', default: 'git-compare-outline' },
 };
 
 export default function MainTabNavigator() {
@@ -73,7 +73,7 @@ export default function MainTabNavigator() {
       <Tab.Screen name="Library" component={LibraryStack} />
       <Tab.Screen name="Capture" component={CaptureScreen} />
       <Tab.Screen name="Search" component={SearchScreen} />
-      <Tab.Screen name="Profile" component={ProfileStack} />
+      <Tab.Screen name="Compare" component={CompareScreen} />
     </Tab.Navigator>
   );
 }

@@ -23,12 +23,19 @@ import { authService } from '../../../features/auth/api/authService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Spacing, BorderRadius, Typography } from '../../../theme';
 
+/**
+ * UI labels match the Web frontend (General, Professional, Student, Developer).
+ * The `id` values are silently mapped to the backend Mongoose enum on dispatch:
+ * user.model.ts → enum: ['General', 'Engineer', 'Analyst', 'Marketer']
+ */
 const PERSONAS = [
-  { id: 'general', label: 'General' },
-  { id: 'professional', label: 'Professional' },
-  { id: 'student', label: 'Student' },
-  { id: 'developer', label: 'Developer' },
+  { id: 'General',  label: 'General',      desc: 'Broad, everyday use' },
+  { id: 'Marketer', label: 'Professional',  desc: 'Business & content focus' },
+  { id: 'Analyst',  label: 'Student',       desc: 'Learning & research focused' },
+  { id: 'Engineer', label: 'Developer',     desc: 'Technical & in-depth' },
 ] as const;
+
+type PersonaId = typeof PERSONAS[number]['id'];
 
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
@@ -182,7 +189,7 @@ export default function ProfileScreen({ navigation }: Props) {
     ]);
   };
 
-  const currentPersonaLabel = PERSONAS.find((p) => p.id === user?.persona)?.label || 'General';
+  const currentPersonaLabel = PERSONAS.find((p) => p.id === (user?.persona as any))?.label || 'General';
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
@@ -302,7 +309,7 @@ export default function ProfileScreen({ navigation }: Props) {
                           borderBottomColor: isDark ? 'rgba(255,255,255,0.05)' : colors.border,
                         }}
                       >
-                        <Text style={{ fontSize: Typography.sizes.base, fontWeight: '600', color: user?.persona === p.id ? colors.primary : colors.text }}>
+                        <Text style={{ fontSize: Typography.sizes.base, fontWeight: '600', color: (user?.persona as any) === p.id ? colors.primary : colors.text }}>
                           {p.label}
                         </Text>
                       </TouchableOpacity>
@@ -312,14 +319,13 @@ export default function ProfileScreen({ navigation }: Props) {
               </View>
 
               {/* Save Button */}
-              <View style={{ alignItems: 'flex-end' }}>
-                <Button
-                  title={isUpdatingIdentity ? 'Saving...' : 'Save Identity'}
-                  onPress={handleUpdateIdentity}
-                  loading={isUpdatingIdentity}
-                  icon={!isUpdatingIdentity ? <Ionicons name="save-outline" size={18} color={isDark ? '#000' : '#fff'} /> : undefined}
-                />
-              </View>
+              <Button
+                title={isUpdatingIdentity ? 'Saving...' : 'Save Identity'}
+                onPress={handleUpdateIdentity}
+                loading={isUpdatingIdentity}
+                fullWidth
+                icon={!isUpdatingIdentity ? <Ionicons name="save-outline" size={18} color={isDark ? '#000' : '#fff'} /> : undefined}
+              />
             </View>
           </Card>
 
@@ -351,15 +357,14 @@ export default function ProfileScreen({ navigation }: Props) {
                 </View>
               </View>
 
-              <View style={{ alignItems: 'flex-end' }}>
-                <Button
-                  title={isUpdatingSecurity ? 'Updating...' : 'Change Master Key'}
-                  onPress={handleUpdateSecurity}
-                  loading={isUpdatingSecurity}
-                  variant="destructive"
-                  icon={!isUpdatingSecurity ? <Ionicons name="key-outline" size={18} color="#fff" /> : undefined}
-                />
-              </View>
+              <Button
+                title={isUpdatingSecurity ? 'Updating...' : 'Change Master Key'}
+                onPress={handleUpdateSecurity}
+                loading={isUpdatingSecurity}
+                variant="destructive"
+                fullWidth
+                icon={!isUpdatingSecurity ? <Ionicons name="key-outline" size={18} color="#fff" /> : undefined}
+              />
             </View>
           </Card>
 

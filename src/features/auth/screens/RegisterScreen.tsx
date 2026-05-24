@@ -19,11 +19,16 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 type Props = NativeStackScreenProps<any, 'Register'>;
 
+/**
+ * UI labels match the Web frontend (General, Professional, Student, Developer).
+ * The `id` values are silently mapped to the backend Mongoose enum on submit:
+ * user.model.ts → enum: ['General', 'Engineer', 'Analyst', 'Marketer']
+ */
 const PERSONAS = [
-  { id: 'general' as const, label: 'General', sub: 'Broad Scope', icon: 'globe-outline' as const },
-  { id: 'professional' as const, label: 'Professional', sub: 'Business & Specs', icon: 'briefcase-outline' as const },
-  { id: 'student' as const, label: 'Student', sub: 'Learning Focus', icon: 'school-outline' as const },
-  { id: 'developer' as const, label: 'Developer', sub: 'Technical & Code', icon: 'terminal-outline' as const },
+  { id: 'General'  as const, label: 'General',      sub: 'Broad Scope',        icon: 'globe-outline'     as const },
+  { id: 'Marketer' as const, label: 'Professional',  sub: 'Business & Specs',   icon: 'briefcase-outline' as const },
+  { id: 'Analyst'  as const, label: 'Student',       sub: 'Learning Focus',     icon: 'school-outline'    as const },
+  { id: 'Engineer' as const, label: 'Developer',     sub: 'Technical & Code',   icon: 'terminal-outline'  as const },
 ];
 
 export default function RegisterScreen({ navigation }: Props) {
@@ -36,7 +41,7 @@ export default function RegisterScreen({ navigation }: Props) {
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [persona, setPersona] = useState<'general' | 'professional' | 'student' | 'developer'>('general');
+  const [persona, setPersona] = useState<'General' | 'Marketer' | 'Analyst' | 'Engineer'>('General');
   const [localErrors, setLocalErrors] = useState<Record<string, string>>({});
 
   const getPasswordStrength = (pass: string) => {
