@@ -143,27 +143,13 @@ export default function CompareScreen({ route }: { route?: any }) {
     setTimeout(() => chatScrollRef.current?.scrollToEnd({ animated: true }), 100);
 
     try {
-      const baseUrl = (api.defaults.baseURL || '').replace(/\/+$/, '');
-      const token = await secureStorage.getToken();
-
-      // Use the selected IDs directly — backend response shape has no `documents` array
       const docIdA = selected[0];
       const docIdB = selected[1];
 
-      const response = await fetch(`${baseUrl}/comparison/${docIdA}/${docIdB}/chat`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ message: msg }),
-      });
+      const response = await api.post(`/comparison/${docIdA}/${docIdB}/chat`, { message: msg });
 
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-      const json = await response.json();
       // Backend returns { success, data: { role: 'assistant', content: string } }
-      const aiContent = json?.data?.content || json?.content || 'No response received.';
+      const aiContent = response.data?.data?.content || response.data?.content || 'No response received.';
       dispatch(addChatMessage({ role: 'assistant', content: aiContent }));
     } catch (e) {
       dispatch(addChatMessage({ role: 'assistant', content: 'Failed to get response. Please try again.' }));

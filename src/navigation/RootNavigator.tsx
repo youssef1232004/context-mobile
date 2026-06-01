@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator, DeviceEventEmitter } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { useSelector } from 'react-redux';
 import { useTheme } from '../context/ThemeContext';
 import { useAppDispatch } from '../store/hooks';
-import { restoreSession } from '../store/authSlice';
+import { restoreSession, logout } from '../store/authSlice';
 import type { RootState } from '../store/store';
 import AuthStack from './AuthStack';
 import MainTabNavigator from './MainTabNavigator';
@@ -34,6 +34,15 @@ export default function RootNavigator() {
       setIsRestoring(false);
     };
     restore();
+
+    // Listen for global 401s
+    const subscription = DeviceEventEmitter.addListener('auth-expired', () => {
+      dispatch(logout());
+    });
+
+    return () => {
+      subscription.remove();
+    };
   }, [dispatch]);
 
   if (isRestoring) {

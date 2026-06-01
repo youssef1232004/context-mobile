@@ -33,7 +33,7 @@ export const authService = {
   },
 
   updateProfile: async (userData: ProfileUpdateData) => {
-    const response = await api.put('/users/profile', userData);
+    const response = await api.patch('/users/profile', userData);
     return response.data;
   },
 
