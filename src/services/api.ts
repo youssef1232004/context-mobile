@@ -5,6 +5,10 @@ const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000/api';
 
 export const api = axios.create({
   baseURL: API_URL,
+  headers: {
+    "Client-Type": "native",
+    "X-Requested-With": "XMLHttpRequest"
+  }
 });
 
 // Interceptor: attach Bearer token from SecureStore before every request
@@ -17,6 +21,20 @@ api.interceptors.request.use(
     return config;
   },
   (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// Global Response Interceptor for Server Errors and 401s
+import { DeviceEventEmitter } from 'react-native';
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response && error.response.status === 401) {
+      // Token expired or invalid
+      DeviceEventEmitter.emit("auth-expired");
+    }
     return Promise.reject(error);
   }
 );

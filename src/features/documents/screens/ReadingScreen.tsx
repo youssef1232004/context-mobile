@@ -196,25 +196,10 @@ export default function ReadingScreen({ route, navigation }: Props) {
     setTimeout(() => chatScrollRef.current?.scrollToEnd({ animated: true }), 100);
 
     try {
-      const baseUrl = (api.defaults.baseURL || '').replace(/\/+$/, '');
-      const token = await secureStorage.getToken();
+      const response = await api.post(`/documents/${documentId}/chat`, { message: msg });
 
-      // Bug #4: Backend /documents/:id/chat returns plain JSON { data: { role: 'ai', content } }
-      // NOT a stream. The old getReader() approach was causing the immediate failure.
-      const response = await fetch(`${baseUrl}/documents/${documentId}/chat`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ message: msg }),
-      });
-
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-      const json = await response.json();
       // Backend: { success: true, data: { role: 'ai', content: aiResponse } }
-      const aiContent = json?.data?.content || json?.content || 'No response received.';
+      const aiContent = response.data?.data?.content || response.data?.content || 'No response received.';
       setMessages((prev) => [...prev, { role: 'assistant', content: aiContent }]);
     } catch (e) {
       setMessages((prev) => [...prev, { role: 'assistant', content: 'Failed to get response. Please try again.' }]);
@@ -242,12 +227,14 @@ export default function ReadingScreen({ route, navigation }: Props) {
   const getExcelHtml = (fileUrl: string) => {
     const bg = isDark ? '#0f0f11' : '#ffffff';
     const fg = isDark ? '#e0e0e6' : '#1a1a2e';
-    const headerBg = isDark ? '#1a1a2e' : '#f5f5f5';
-    const borderColor = isDark ? '#333' : '#ddd';
+    const headerBg = isDark ? '#1a1a2e' : '#f8fafc';
+    const borderColor = isDark ? '#333333' : '#e2e8f0';
     const accent = '#6366f1';
+
     return `<!DOCTYPE html>
 <html><head><meta name="viewport" content="width=device-width, initial-scale=1">
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
   body { background:${bg}; color:${fg}; font-family:-apple-system,system-ui,sans-serif; padding:12px; }
@@ -274,12 +261,13 @@ export default function ReadingScreen({ route, navigation }: Props) {
     wb.SheetNames.forEach(name => {
       const ws = wb.Sheets[name];
       const html = XLSX.utils.sheet_to_html(ws, { id: 'tbl_' + name.replace(/\\s/g,'_'), editable: false });
+      const cleanHtml = DOMPurify.sanitize(html);
       const label = document.createElement('div');
       label.className = 'sheet-name';
       label.textContent = name;
       const wrap = document.createElement('div');
       wrap.className = 'tbl-wrap';
-      wrap.innerHTML = html;
+      wrap.innerHTML = cleanHtml;
       container.appendChild(label);
       container.appendChild(wrap);
     });
@@ -303,6 +291,7 @@ export default function ReadingScreen({ route, navigation }: Props) {
     return `<!DOCTYPE html>
 <html><head><meta name="viewport" content="width=device-width, initial-scale=1">
 <script src="https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
   body { background:${bg}; color:${fg}; font-family:-apple-system,system-ui,sans-serif;
@@ -328,9 +317,10 @@ export default function ReadingScreen({ route, navigation }: Props) {
     const res = await fetch("${fileUrl}");
     const buf = await res.arrayBuffer();
     const result = await mammoth.convertToHtml({arrayBuffer:buf});
+    const cleanHtml = DOMPurify.sanitize(result.value);
     document.getElementById('loading').style.display='none';
     document.getElementById('content').style.display='block';
-    document.getElementById('content').innerHTML = result.value || '<p>No content extracted.</p>';
+    document.getElementById('content').innerHTML = cleanHtml || '<p>No content extracted.</p>';
   } catch(e) {
     document.getElementById('loading').style.display='none';
     document.getElementById('error').style.display='block';

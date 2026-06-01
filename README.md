@@ -146,6 +146,16 @@ The core data layer for the entire library:
 
 ---
 
+## 🔒 Security & Performance Updates
+
+In alignment with the Web and Desktop platforms, Context Mobile includes several platform-specific security hardenings:
+1. **Dual Authentication Support:** Implements the `Client-Type: native` HTTP header to seamlessly receive Bearer tokens in JSON payloads while bypassing strict `HttpOnly` web cookies.
+2. **Global 401 Interceptors:** Intercepts expired session tokens via `DeviceEventEmitter("auth-expired")`, automatically purging the `SecureStore` and reverting to the `AuthStack`.
+3. **WebView XSS Sandboxing:** Injecting `DOMPurify` natively into the `react-native-webview` context to sanitize raw HTML when rendering Mammoth `.docx` arrays.
+4. **Strict API Usage:** Bypassing raw `fetch` calls in favor of the global `axios` instance for uniform CSRF protection (`X-Requested-With: XMLHttpRequest`).
+
+---
+
 ## 🛠️ Tech Stack
 
 | Technology | Version | Purpose |

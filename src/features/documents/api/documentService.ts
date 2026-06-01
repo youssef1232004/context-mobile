@@ -129,10 +129,7 @@ export const documentService = {
     return response.data;
   },
 
-  applySemanticFolders: async (updates: any[]) => {
-    const response = await api.put('/folders/semantic', { updates });
-    return response.data;
-  },
+
 
   synthesize: async (documentIds: string[]) => {
     const response = await api.post('/ai/synthesize', { documentIds });
