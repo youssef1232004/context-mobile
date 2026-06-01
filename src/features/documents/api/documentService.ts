@@ -1,6 +1,6 @@
 import { api } from '../../../services/api';
 
-export type DocumentType = 'PDF' | 'Word' | 'Image' | 'TextSnippet';
+export type DocumentType = 'PDF' | 'Word' | 'Image' | 'TextSnippet' | 'Excel';
 export type AIStatus = 'Pending' | 'Processing' | 'Analyzed' | 'Failed';
 export type CognitiveLoad = 'Light' | 'Medium' | 'Heavy';
 
