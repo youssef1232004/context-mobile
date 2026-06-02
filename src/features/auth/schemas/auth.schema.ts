@@ -21,6 +21,7 @@ export interface AuthUser {
   persona: 'general' | 'professional' | 'student' | 'developer';
   avatar?: string;
   createdAt?: string;
+  lastActiveComparisonId?: string;
 }
 
 export interface AuthResponse {
@@ -36,4 +37,5 @@ export interface ProfileUpdateData {
   password?: string;
   currentPassword?: string;
   persona?: string;
+  lastActiveComparisonId?: string;
 }

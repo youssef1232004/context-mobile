@@ -49,7 +49,7 @@ export const comparisonService = {
   },
 
   /** PATCH /comparison/history/:id */
-  updateHistory: async (id: string, updates: { titleA?: string; titleB?: string }) => {
+  updateHistory: async (id: string, updates: { titleA?: string; titleB?: string; customTitle?: string }) => {
     const response = await api.patch(`/comparison/history/${id}`, updates);
     return response.data;
   },

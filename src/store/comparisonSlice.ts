@@ -1,10 +1,15 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { comparisonService, type ComparisonResult } from '../features/comparison/api/comparisonService';
+import { updateProfile } from './authSlice';
+import type { RootState } from './store';
 
 interface ComparisonState {
   historyList: ComparisonResult[];
   activeComparison: ComparisonResult | null;
   activeChatMessages: any[];
+  activeDocIdA: string | null;
+  activeDocIdB: string | null;
+  comparisonWarning: string | null;
   isComparing: boolean;
   isHistoryLoading: boolean;
   error: string | null;
@@ -14,6 +19,9 @@ const initialState: ComparisonState = {
   historyList: [],
   activeComparison: null,
   activeChatMessages: [],
+  activeDocIdA: null,
+  activeDocIdB: null,
+  comparisonWarning: null,
   isComparing: false,
   isHistoryLoading: false,
   error: null,
@@ -55,10 +63,10 @@ export const loadComparisonRecord = createAsyncThunk(
 
 export const renameHistoryRecord = createAsyncThunk(
   'comparison/renameHistory',
-  async ({ id, titleA, titleB }: { id: string, titleA?: string, titleB?: string }, { rejectWithValue }) => {
+  async ({ id, customTitle }: { id: string; customTitle: string }, { rejectWithValue }) => {
     try {
-      await comparisonService.updateHistory(id, { titleA, titleB });
-      return { id, titleA, titleB };
+      await comparisonService.updateHistory(id, { customTitle });
+      return { id, customTitle };
     } catch (e: any) {
       return rejectWithValue(e?.response?.data?.message || 'Failed to rename history');
     }
@@ -79,7 +87,7 @@ export const deleteHistoryRecord = createAsyncThunk(
 
 export const compareDocuments = createAsyncThunk(
   'comparison/compareDocuments',
-  async (params: { selectedIds: string[], documents: any[] }, { rejectWithValue }) => {
+  async (params: { selectedIds: string[], documents: any[] }, { dispatch, rejectWithValue }) => {
     try {
       const res = await comparisonService.compare(params.selectedIds);
       const comparison = res.data.comparison;
@@ -88,7 +96,7 @@ export const compareDocuments = createAsyncThunk(
       const docB = params.documents.find(d => d._id === params.selectedIds[1]);
       
       try {
-        await comparisonService.saveHistory({
+        const savedRes = await comparisonService.saveHistory({
           docIdA: params.selectedIds[0],
           docIdB: params.selectedIds[1],
           titleA: docA?.title || 'Document A',
@@ -99,11 +107,35 @@ export const compareDocuments = createAsyncThunk(
             comparison: comparison
           } as any
         });
-      } catch {}
+        
+        const savedId = savedRes.data?._id || savedRes._id || (savedRes.data as any)?.id;
+        if (savedId) {
+          dispatch(updateProfile({ lastActiveComparisonId: savedId }));
+        }
+      } catch (e) {
+        console.error("Failed to save history", e);
+      }
       
       return comparison;
     } catch (e: any) {
       return rejectWithValue(e?.response?.data?.message || 'Comparison failed');
+    }
+  }
+);
+
+export const hydrateLastSession = createAsyncThunk(
+  'comparison/hydrateLastSession',
+  async (_, { dispatch, getState, rejectWithValue }) => {
+    try {
+      const state = getState() as RootState;
+      const lastId = state.auth.user?.lastActiveComparisonId;
+      if (lastId && !state.comparison.activeComparison) {
+        await dispatch(loadComparisonRecord(lastId)).unwrap();
+        return lastId;
+      }
+      return null;
+    } catch (e: any) {
+      return rejectWithValue('Failed to hydrate session');
     }
   }
 );
@@ -115,11 +147,16 @@ const comparisonSlice = createSlice({
     clearActiveComparison: (state) => {
       state.activeComparison = null;
       state.activeChatMessages = [];
+      state.activeDocIdA = null;
+      state.activeDocIdB = null;
       state.error = null;
     },
     addChatMessage: (state, action) => {
       state.activeChatMessages.push(action.payload);
-    }
+    },
+    clearComparisonWarning: (state) => {
+      state.comparisonWarning = null;
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -143,6 +180,8 @@ const comparisonSlice = createSlice({
         const actualResult = action.payload.record.comparison?.comparison ? action.payload.record.comparison.comparison : action.payload.record.comparison;
         state.activeComparison = actualResult;
         state.activeChatMessages = action.payload.chatMessages;
+        state.activeDocIdA = action.payload.record.docIdA || null;
+        state.activeDocIdB = action.payload.record.docIdB || null;
       })
       .addCase(loadComparisonRecord.rejected, (state, action) => {
         state.isComparing = false;
@@ -152,11 +191,17 @@ const comparisonSlice = createSlice({
         state.isComparing = true;
         state.activeComparison = null;
         state.activeChatMessages = [];
+        state.activeDocIdA = null;
+        state.activeDocIdB = null;
+        state.comparisonWarning = null;
         state.error = null;
       })
       .addCase(compareDocuments.fulfilled, (state, action) => {
         state.isComparing = false;
         state.activeComparison = action.payload;
+        state.activeDocIdA = action.meta.arg.selectedIds[0];
+        state.activeDocIdB = action.meta.arg.selectedIds[1];
+        state.comparisonWarning = action.payload?._warning || null;
       })
       .addCase(compareDocuments.rejected, (state, action) => {
         state.isComparing = false;
@@ -168,12 +213,11 @@ const comparisonSlice = createSlice({
       .addCase(renameHistoryRecord.fulfilled, (state, action) => {
         const index = state.historyList.findIndex(h => h._id === action.payload.id);
         if (index !== -1) {
-          if (action.payload.titleA) (state.historyList[index] as any).titleA = action.payload.titleA;
-          if (action.payload.titleB) (state.historyList[index] as any).titleB = action.payload.titleB;
+          (state.historyList[index] as any).customTitle = action.payload.customTitle;
         }
       });
   },
 });
 
-export const { clearActiveComparison, addChatMessage } = comparisonSlice.actions;
+export const { clearActiveComparison, addChatMessage, clearComparisonWarning } = comparisonSlice.actions;
 export default comparisonSlice.reducer;
