@@ -2,12 +2,14 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, TextInput,
   KeyboardAvoidingView, Platform, Keyboard, ActivityIndicator,
-  Modal, FlatList, Animated
+  Modal, FlatList, Animated, Alert,
 } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Markdown from 'react-native-markdown-display';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
 import { useTheme } from '../../../context/ThemeContext';
 import { Card } from '../../../components/Card';
 import { Button } from '../../../components/Button';
@@ -16,19 +18,138 @@ import { useToast } from '../../../hooks/useToast';
 import { SkeletonLoader } from '../../../components/SkeletonLoader';
 import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '../../../store/store';
-import { fetchHistory, loadComparisonRecord, compareDocuments, clearActiveComparison, addChatMessage, deleteHistoryRecord } from '../../../store/comparisonSlice';
+import {
+  fetchHistory,
+  loadComparisonRecord,
+  compareDocuments,
+  clearActiveComparison,
+  addChatMessage,
+  deleteHistoryRecord,
+  renameHistoryRecord,
+  clearComparisonWarning,
+  hydrateLastSession,
+} from '../../../store/comparisonSlice';
 import { comparisonService, type ComparisonResult } from '../api/comparisonService';
 import { documentService } from '../../documents/api/documentService';
 import { Spacing, Typography, BorderRadius } from '../../../theme';
 import { api } from '../../../services/api';
 import { secureStorage } from '../../../services/secureStorage';
 
+// ── Rename Modal ──────────────────────────────────────────────────────────────
+function RenameModal({
+  visible,
+  initialValue,
+  onCancel,
+  onSave,
+}: {
+  visible: boolean;
+  initialValue: string;
+  onCancel: () => void;
+  onSave: (value: string) => void;
+}) {
+  const { colors, isDark } = useTheme();
+  const [value, setValue] = useState(initialValue);
+
+  // Reset when opened with new item
+  useEffect(() => {
+    if (visible) setValue(initialValue);
+  }, [visible, initialValue]);
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
+      <TouchableOpacity
+        style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center', padding: 24 }}
+        activeOpacity={1}
+        onPress={onCancel}
+      >
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'padding'} style={{ width: '100%', alignItems: 'center' }}>
+          <TouchableOpacity
+            activeOpacity={1}
+            style={{
+              width: '100%', maxWidth: 360,
+            backgroundColor: isDark ? '#141418' : '#fff',
+            borderRadius: 24, overflow: 'hidden',
+            borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.08)' : '#e5e7eb',
+            shadowColor: '#000', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.35, shadowRadius: 24, elevation: 24,
+          }}
+        >
+          {/* Icon + Title */}
+          <View style={{ alignItems: 'center', paddingTop: 28, paddingHorizontal: 24, paddingBottom: 16, gap: 10 }}>
+            <View style={{
+              width: 52, height: 52, borderRadius: 26,
+              backgroundColor: isDark ? 'rgba(99,102,241,0.15)' : 'rgba(99,102,241,0.1)',
+              alignItems: 'center', justifyContent: 'center',
+            }}>
+              <Ionicons name="pencil" size={24} color={colors.primary} />
+            </View>
+            <Text style={{ fontSize: 18, fontWeight: '800', color: colors.text }}>Rename Comparison</Text>
+            <Text style={{ fontSize: 13, color: colors.textSecondary, textAlign: 'center' }}>
+              Enter a new name for this comparison record.
+            </Text>
+          </View>
+
+          {/* Input */}
+          <View style={{ paddingHorizontal: 20, paddingBottom: 16 }}>
+            <TextInput
+              value={value}
+              onChangeText={setValue}
+              autoFocus
+              returnKeyType="done"
+              onSubmitEditing={() => value.trim() && onSave(value.trim())}
+              placeholder="Enter new name…"
+              placeholderTextColor={colors.textSecondary}
+              style={{
+                backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#f3f4f6',
+                borderRadius: BorderRadius.lg, borderWidth: 1,
+                borderColor: isDark ? 'rgba(99,102,241,0.35)' : 'rgba(99,102,241,0.3)',
+                paddingHorizontal: 16, paddingVertical: 12,
+                fontSize: 14, fontWeight: '600', color: colors.text, textAlign: 'center',
+              }}
+            />
+          </View>
+
+          {/* Actions */}
+          <View style={{ flexDirection: 'row', borderTopWidth: 1, borderTopColor: isDark ? 'rgba(255,255,255,0.07)' : '#f3f4f6' }}>
+            <TouchableOpacity
+              onPress={onCancel}
+              style={{ flex: 1, paddingVertical: 16, alignItems: 'center' }}
+            >
+              <Text style={{ fontSize: 14, fontWeight: '600', color: colors.textSecondary }}>Cancel</Text>
+            </TouchableOpacity>
+            <View style={{ width: 1, backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : '#f3f4f6' }} />
+            <TouchableOpacity
+              onPress={() => value.trim() && onSave(value.trim())}
+              disabled={!value.trim()}
+              style={{ flex: 1, paddingVertical: 16, alignItems: 'center', opacity: value.trim() ? 1 : 0.45 }}
+            >
+              <Text style={{ fontSize: 14, fontWeight: '800', color: colors.primary }}>Save</Text>
+            </TouchableOpacity>
+          </View>
+          </TouchableOpacity>
+        </KeyboardAvoidingView>
+      </TouchableOpacity>
+    </Modal>
+  );
+}
+
+// ── Main Screen ───────────────────────────────────────────────────────────────
 export default function CompareScreen({ route }: { route?: any }) {
   const { colors, isDark } = useTheme();
   const { toast, showToast, hideToast } = useToast();
 
   const dispatch = useDispatch<AppDispatch>();
-  const { historyList, activeComparison: result, activeChatMessages: messages, isHistoryLoading: loadingHistory, isComparing: comparing } = useSelector((state: RootState) => state.comparison);
+  const {
+    historyList,
+    activeComparison: result,
+    activeChatMessages: messages,
+    activeDocIdA,
+    activeDocIdB,
+    comparisonWarning,
+    isHistoryLoading: loadingHistory,
+    isComparing: comparing,
+  } = useSelector((state: RootState) => state.comparison);
+
+  const [historySearch, setHistorySearch] = useState('');
 
   const [documents, setDocuments] = useState<any[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
@@ -38,11 +159,27 @@ export default function CompareScreen({ route }: { route?: any }) {
   // History modal state
   const [historyOpen, setHistoryOpen] = useState(false);
 
+  // Rename modal state
+  const [renameTarget, setRenameTarget] = useState<{ id: string; current: string } | null>(null);
+
   // Chat state
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
   const chatScrollRef = useRef<ScrollView>(null);
+
+  // Session restore
+  useEffect(() => {
+    dispatch(hydrateLastSession());
+  }, []);
+
+  // Warning toast
+  useEffect(() => {
+    if (comparisonWarning) {
+      showToast(comparisonWarning, 'warning');
+      dispatch(clearComparisonWarning());
+    }
+  }, [comparisonWarning]);
 
   // Auto-trigger if IDs passed from Library
   const autoTriggered = useRef(false);
@@ -99,6 +236,7 @@ export default function CompareScreen({ route }: { route?: any }) {
       if (docAId && docBId) {
         setSelected([docAId, docBId]);
       }
+      setDocsLoaded(true);
     } catch {
       showToast('Failed to load comparison record', 'error');
     }
@@ -130,11 +268,109 @@ export default function CompareScreen({ route }: { route?: any }) {
     }
   };
 
-  // ── Bug #1: Chat — uses `selected` array (not result.documents which doesn't exist in compare response) ──
+  // ── Export Report ─────────────────────────────────────────────────────────
+  const handleExportReport = async () => {
+    if (!result) {
+      showToast('No comparison data available to export.', 'error');
+      return;
+    }
+
+    let titleA = 'Document A';
+    let titleB = 'Document B';
+
+    // Try to get titles from the active comparison result itself
+    if (result.doc1?.title && result.doc2?.title) {
+      titleA = result.doc1.title;
+      titleB = result.doc2.title;
+    } else {
+      // Fallback: look in documents or history
+      const docA = documents.find((d) => d._id === selected[0]);
+      const docB = documents.find((d) => d._id === selected[1]);
+      
+      if (docA && docB) {
+        titleA = docA.title;
+        titleB = docB.title;
+      } else {
+        // Fallback: look in history
+        const hRec: any = historyList.find((h) => h.docIdA === activeDocIdA && h.docIdB === activeDocIdB);
+        if (hRec?.titleA && hRec?.titleB) {
+          titleA = hRec.titleA;
+          titleB = hRec.titleB;
+        }
+      }
+    }
+
+    const synthesis = result.synthesis || result.summary || '';
+    const similarities = result.similarities || [];
+    const uniqueToA = result.uniqueToA || [];
+    const uniqueToB = result.uniqueToB || result.differences || [];
+
+    const reportContent = [
+      `# Comparison Report: ${titleA} vs ${titleB}`,
+      '',
+      `## AI Synthesis`,
+      synthesis,
+      '',
+      `## Shared Concepts`,
+      similarities.length > 0 ? similarities.map((i: string) => `- ${i}`).join('\n') : '_None found._',
+      '',
+      `## Unique to ${titleA}`,
+      uniqueToA.length > 0 ? uniqueToA.map((i: string) => `- ${i}`).join('\n') : '_None found._',
+      '',
+      `## Unique to ${titleB}`,
+      uniqueToB.length > 0 ? uniqueToB.map((i: string) => `- ${i}`).join('\n') : '_None found._',
+      '',
+      `---`,
+      `_Generated on ${new Date().toLocaleString()}_`,
+    ].join('\n');
+
+    try {
+      const dateStr = new Date().toISOString().split('T')[0];
+      const fileName = `comparison-report-${dateStr}.md`;
+      const filePath = `${FileSystem.cacheDirectory}${fileName}`;
+      await FileSystem.writeAsStringAsync(filePath, reportContent, { encoding: 'utf8' as any });
+
+      const canShare = await Sharing.isAvailableAsync();
+      if (canShare) {
+        await Sharing.shareAsync(filePath, { 
+          mimeType: Platform.OS === 'android' ? 'text/plain' : 'text/markdown', 
+          dialogTitle: 'Export Comparison Report',
+          UTI: 'net.daringfireball.markdown'
+        });
+      } else {
+        showToast('Sharing is not available on this device.', 'error');
+      }
+    } catch (err) {
+      console.error("Export error:", err);
+      showToast('Failed to export report.', 'error');
+    }
+  };
+
+  // ── Rename handler ────────────────────────────────────────────────────────
+  const handleRename = async (customTitle: string) => {
+    if (!renameTarget) return;
+    try {
+      await dispatch(renameHistoryRecord({ id: renameTarget.id, customTitle })).unwrap();
+      setRenameTarget(null);
+      showToast('Renamed successfully', 'success');
+    } catch {
+      showToast('Failed to rename record', 'error');
+    }
+  };
+
+  // ── Filtered history ──────────────────────────────────────────────────────
+  const filteredHistory = historyList.filter((h: any) => {
+    const q = historySearch.toLowerCase();
+    if (!q) return true;
+    const defaultTitle = `${h.titleA || ''} vs ${h.titleB || ''}`.toLowerCase();
+    const custom = ((h.customTitle as string) || '').toLowerCase();
+    return defaultTitle.includes(q) || custom.includes(q);
+  });
+
+  // ── Chat ──────────────────────────────────────────────────────────────────
   const sendChatMessage = async () => {
     const msg = chatInput.trim();
-    // Guard: need at least 2 selected docs and an active result
-    if (!msg || chatLoading || !result || selected.length < 2) return;
+    if (!msg || chatLoading || !result || !activeDocIdA || !activeDocIdB) return;
 
     Keyboard.dismiss();
     setChatInput('');
@@ -143,12 +379,7 @@ export default function CompareScreen({ route }: { route?: any }) {
     setTimeout(() => chatScrollRef.current?.scrollToEnd({ animated: true }), 100);
 
     try {
-      const docIdA = selected[0];
-      const docIdB = selected[1];
-
-      const response = await api.post(`/comparison/${docIdA}/${docIdB}/chat`, { message: msg });
-
-      // Backend returns { success, data: { role: 'assistant', content: string } }
+      const response = await api.post(`/comparison/${activeDocIdA}/${activeDocIdB}/chat`, { message: msg });
       const aiContent = response.data?.data?.content || response.data?.content || 'No response received.';
       dispatch(addChatMessage({ role: 'assistant', content: aiContent }));
     } catch (e) {
@@ -159,7 +390,7 @@ export default function CompareScreen({ route }: { route?: any }) {
     }
   };
 
-  // ── Markdown styles for chat bubbles ──
+  // ── Markdown styles ───────────────────────────────────────────────────────
   const markdownStyles = {
     body: { color: colors.text, fontSize: 13, lineHeight: 20 },
     paragraph: { color: colors.text, fontSize: 13, lineHeight: 20, marginBottom: 4 },
@@ -175,7 +406,7 @@ export default function CompareScreen({ route }: { route?: any }) {
     heading3: { fontSize: 13, fontWeight: '700' as const, color: colors.text, marginBottom: 4 },
   };
 
-  // ── Bug #12: Delta section builder ──
+  // ── Delta Section ─────────────────────────────────────────────────────────
   const DeltaSection = ({ title, items, accentColor, iconName }: { title: string; items: string[]; accentColor: string; iconName: React.ComponentProps<typeof Ionicons>['name'] }) => (
     <Card
       title={title}
@@ -217,15 +448,14 @@ export default function CompareScreen({ route }: { route?: any }) {
         </View>
       </View>
 
-      {/* Bug #6: keyboardVerticalOffset fixes keyboard hiding input */}
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
         <ScrollView contentContainerStyle={{ padding: Spacing.xl, gap: Spacing.xl, paddingBottom: Spacing['4xl'] }}>
 
-          {!docsLoaded && (
+          {!docsLoaded && !result && !comparing && (
             <>
               <View>
                 <Text style={{ fontSize: Typography.sizes['3xl'], fontWeight: '800', color: colors.text, marginTop: 4 }}>Compare Docs</Text>
@@ -293,10 +523,9 @@ export default function CompareScreen({ route }: { route?: any }) {
 
           {comparing && <SkeletonLoader count={3} type="card" />}
 
-          {/* ── Bug #12: AI Synthesis Card ── */}
           {result && !comparing && (
             <>
-              {/* AI Synthesis + Similarity Badge */}
+              {/* AI Synthesis */}
               {(result.synthesis || result.summary) && (
                 <View style={{
                   backgroundColor: isDark ? 'rgba(99,102,241,0.08)' : 'rgba(99,102,241,0.04)',
@@ -334,51 +563,24 @@ export default function CompareScreen({ route }: { route?: any }) {
                 </View>
               )}
 
-              {/* Bug #12: DeltaBoard — Shared Concepts (similarities), Unique to Base (uniqueToA), Unique to Comparison (uniqueToB) */}
               {result.similarities && result.similarities.length > 0 && (
-                <DeltaSection
-                  title="Shared Concepts"
-                  items={result.similarities}
-                  accentColor="#10b981"
-                  iconName="git-merge-outline"
-                />
+                <DeltaSection title="Shared Concepts" items={result.similarities} accentColor="#10b981" iconName="git-merge-outline" />
               )}
-
               {result.uniqueToA && result.uniqueToA.length > 0 && (
-                <DeltaSection
-                  title="Unique to Base"
-                  items={result.uniqueToA}
-                  accentColor={colors.primary}
-                  iconName="remove-circle-outline"
-                />
+                <DeltaSection title="Unique to Base" items={result.uniqueToA} accentColor={colors.primary} iconName="remove-circle-outline" />
               )}
-
               {result.uniqueToB && result.uniqueToB.length > 0 && (
-                <DeltaSection
-                  title="Unique to Comparison"
-                  items={result.uniqueToB}
-                  accentColor="#f59e0b"
-                  iconName="add-circle-outline"
-                />
+                <DeltaSection title="Unique to Comparison" items={result.uniqueToB} accentColor="#f59e0b" iconName="add-circle-outline" />
               )}
-
-              {/* Legacy fallback: differences field from history records */}
               {!result.uniqueToA && result.differences && result.differences.length > 0 && (
-                <DeltaSection
-                  title="Differences"
-                  items={result.differences}
-                  accentColor="#f59e0b"
-                  iconName="git-branch-outline"
-                />
+                <DeltaSection title="Differences" items={result.differences} accentColor="#f59e0b" iconName="git-branch-outline" />
               )}
 
-              {/* ── Chat Toggle Button — opens the AI Assistant panel ── */}
+              {/* AI Assistant toggle */}
               <TouchableOpacity
                 onPress={() => {
                   setIsChatOpen((prev) => !prev);
-                  if (!isChatOpen) {
-                    setTimeout(() => chatScrollRef.current?.scrollToEnd({ animated: true }), 200);
-                  }
+                  if (!isChatOpen) setTimeout(() => chatScrollRef.current?.scrollToEnd({ animated: true }), 200);
                 }}
                 style={{
                   flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm,
@@ -404,17 +606,31 @@ export default function CompareScreen({ route }: { route?: any }) {
                     </Text>
                   </View>
                 )}
-                <Ionicons
-                  name={isChatOpen ? 'chevron-up' : 'chevron-down'}
-                  size={14}
-                  color={isChatOpen ? colors.primary : colors.textSecondary}
-                />
+                <Ionicons name={isChatOpen ? 'chevron-up' : 'chevron-down'} size={14} color={isChatOpen ? colors.primary : colors.textSecondary} />
+              </TouchableOpacity>
+
+              {/* Export Report button - Ghost Outline */}
+              <TouchableOpacity
+                onPress={handleExportReport}
+                style={{
+                  flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+                  paddingVertical: 12, paddingHorizontal: Spacing.lg,
+                  borderRadius: BorderRadius.xl, borderWidth: 1,
+                  borderColor: isDark ? 'rgba(99,102,241,0.5)' : 'rgba(99,102,241,0.5)',
+                  backgroundColor: 'transparent',
+                  marginTop: Spacing.sm,
+                }}
+              >
+                <Ionicons name="share-outline" size={18} color={colors.primary} />
+                <Text style={{ fontSize: 13, fontWeight: '700', color: colors.primary }}>
+                  Export Report
+                </Text>
               </TouchableOpacity>
             </>
           )}
         </ScrollView>
 
-        {/* ── AI Assistant Chat Panel — fixed panel below scroll, mirroring ReadingScreen ── */}
+        {/* ── AI Assistant Chat Panel ── */}
         {isChatOpen && result && (
           <View style={{
             height: 340,
@@ -422,7 +638,6 @@ export default function CompareScreen({ route }: { route?: any }) {
             borderTopColor: isDark ? 'rgba(255,255,255,0.08)' : colors.border,
             backgroundColor: isDark ? '#0f0f11' : '#fafafa',
           }}>
-            {/* Panel header */}
             <View style={{
               flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
               paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm,
@@ -438,7 +653,6 @@ export default function CompareScreen({ route }: { route?: any }) {
               </TouchableOpacity>
             </View>
 
-            {/* Messages */}
             <ScrollView
               ref={chatScrollRef}
               style={{ flex: 1, paddingHorizontal: Spacing.lg }}
@@ -482,7 +696,6 @@ export default function CompareScreen({ route }: { route?: any }) {
               )}
             </ScrollView>
 
-            {/* Input row */}
             <View style={{
               flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
               paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm,
@@ -520,7 +733,7 @@ export default function CompareScreen({ route }: { route?: any }) {
         )}
       </KeyboardAvoidingView>
 
-      {/* ── Bug #5: History as bottom-sheet Modal ── */}
+      {/* ── History Bottom-Sheet Modal ── */}
       <Modal
         visible={historyOpen}
         animationType="slide"
@@ -528,21 +741,35 @@ export default function CompareScreen({ route }: { route?: any }) {
         onRequestClose={() => setHistoryOpen(false)}
       >
         <TouchableOpacity
-          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' }}
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}
           activeOpacity={1}
           onPress={() => setHistoryOpen(false)}
-        />
-        <View style={{
-          backgroundColor: isDark ? '#0f0f11' : '#fff',
-          borderTopLeftRadius: 24, borderTopRightRadius: 24,
-          padding: Spacing.xl, maxHeight: '70%',
-          shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.15, shadowRadius: 16, elevation: 20,
-        }}>
-          {/* Handle */}
+        >
+          <KeyboardAvoidingView 
+            behavior={Platform.OS === 'ios' ? 'padding' : 'padding'} 
+            style={{ width: '100%' }}
+          >
+            <TouchableOpacity activeOpacity={1} style={{ width: '100%' }}>
+              <View style={{
+                maxHeight: '95%',
+                backgroundColor: isDark ? '#0f0f11' : '#fff',
+                borderTopLeftRadius: 24, borderTopRightRadius: 24,
+                padding: Spacing.xl,
+                shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.15, shadowRadius: 16, elevation: 20,
+              }}>
+            {/* Rename Modal */}
+            <RenameModal
+              visible={!!renameTarget}
+              initialValue={renameTarget?.current || ''}
+              onCancel={() => setRenameTarget(null)}
+              onSave={handleRename}
+            />
+
+            {/* Handle */}
           <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: isDark ? 'rgba(255,255,255,0.15)' : '#e0e0e0', alignSelf: 'center', marginBottom: Spacing.lg }} />
 
           {/* Modal Header */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Spacing.lg }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Spacing.md }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm }}>
               <Ionicons name="time" size={20} color={colors.primary} />
               <Text style={{ fontSize: Typography.sizes.xl, fontWeight: '800', color: colors.text }}>Comparison History</Text>
@@ -566,62 +793,113 @@ export default function CompareScreen({ route }: { route?: any }) {
             <Text style={{ fontWeight: '700', color: colors.primary, fontSize: Typography.sizes.base }}>New Comparison</Text>
           </TouchableOpacity>
 
+          {/* ── Search bar ── */}
+          <View style={{
+            flexDirection: 'row', alignItems: 'center', gap: 8,
+            backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#f3f4f6',
+            borderRadius: BorderRadius.lg, borderWidth: 1,
+            borderColor: isDark ? 'rgba(255,255,255,0.08)' : colors.border,
+            paddingHorizontal: 12, marginBottom: Spacing.md,
+          }}>
+            <Ionicons name="search-outline" size={15} color={colors.textSecondary} />
+            <TextInput
+              value={historySearch}
+              onChangeText={setHistorySearch}
+              placeholder="Search records…"
+              placeholderTextColor={colors.textSecondary}
+              returnKeyType="search"
+              style={{
+                flex: 1, paddingVertical: 9, fontSize: 13,
+                color: colors.text, fontWeight: '500',
+              }}
+            />
+            {historySearch.length > 0 && (
+              <TouchableOpacity onPress={() => setHistorySearch('')}>
+                <Ionicons name="close-circle" size={16} color={colors.textSecondary} />
+              </TouchableOpacity>
+            )}
+          </View>
+
           {/* History list */}
           {loadingHistory ? (
             <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: Spacing.lg }} />
           ) : historyList.length === 0 ? (
             <Text style={{ color: colors.textSecondary, textAlign: 'center', paddingVertical: Spacing['2xl'] }}>No past comparisons yet.</Text>
+          ) : filteredHistory.length === 0 ? (
+            <Text style={{ color: colors.textSecondary, textAlign: 'center', paddingVertical: Spacing['2xl'] }}>No results match your search.</Text>
           ) : (
             <FlatList
-              data={historyList}
+              data={filteredHistory}
               keyExtractor={(h) => h._id!}
-              showsVerticalScrollIndicator={false}
+              showsVerticalScrollIndicator={true}
+              keyboardShouldPersistTaps="handled"
+              style={{ flexShrink: 1 }}
               ItemSeparatorComponent={() => <View style={{ height: Spacing.sm }} />}
-              renderItem={({ item: h }) => (
-                <Swipeable
-                  renderRightActions={() => (
+              renderItem={({ item: h }) => {
+                const displayName = (h as any).customTitle || ((h as any).titleA && (h as any).titleB ? `${(h as any).titleA} vs ${(h as any).titleB}` : 'Comparison Record');
+                return (
+                  <Swipeable
+                    renderRightActions={() => (
+                      <TouchableOpacity
+                        onPress={() => dispatch(deleteHistoryRecord(h._id!))}
+                        style={{
+                          backgroundColor: '#ef4444',
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                          width: 70,
+                          borderTopRightRadius: BorderRadius.lg,
+                          borderBottomRightRadius: BorderRadius.lg,
+                        }}
+                      >
+                        <Ionicons name="trash" size={24} color="#fff" />
+                      </TouchableOpacity>
+                    )}
+                  >
                     <TouchableOpacity
-                      onPress={() => dispatch(deleteHistoryRecord(h._id!))}
+                      onPress={() => loadHistoryRecordHandler(h._id!)}
+                      onLongPress={() => setRenameTarget({ id: h._id!, current: displayName })}
+                      delayLongPress={400}
                       style={{
-                        backgroundColor: '#ef4444',
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                        width: 70,
-                        borderTopRightRadius: BorderRadius.lg,
-                        borderBottomRightRadius: BorderRadius.lg,
+                        padding: Spacing.md, borderRadius: BorderRadius.lg, borderWidth: 1,
+                        borderColor: isDark ? 'rgba(255,255,255,0.08)' : colors.border,
+                        backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : colors.surface,
+                        flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
                       }}
                     >
-                      <Ionicons name="trash" size={24} color="#fff" />
-                    </TouchableOpacity>
-                  )}
-                >
-                  <TouchableOpacity
-                    onPress={() => loadHistoryRecordHandler(h._id!)}
-                    style={{
-                      padding: Spacing.md, borderRadius: BorderRadius.lg, borderWidth: 1,
-                      borderColor: isDark ? 'rgba(255,255,255,0.08)' : colors.border,
-                      backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : colors.surface,
-                      flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
-                    }}
-                  >
-                    <Ionicons name="git-compare-outline" size={18} color={colors.textSecondary} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ color: colors.text, fontWeight: '600', fontSize: Typography.sizes.sm }} numberOfLines={1}>
-                        {(h as any).titleA && (h as any).titleB ? `${(h as any).titleA} vs ${(h as any).titleB}` : 'Comparison Record'}
-                      </Text>
-                      {h.createdAt && (
-                        <Text style={{ color: colors.textSecondary, fontSize: 11, marginTop: 2 }}>
-                          {new Date(h.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                      <Ionicons name="git-compare-outline" size={18} color={colors.textSecondary} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ color: colors.text, fontWeight: '600', fontSize: Typography.sizes.sm }} numberOfLines={1}>
+                          {displayName}
                         </Text>
-                      )}
-                    </View>
-                    <Ionicons name="chevron-forward" size={14} color={colors.textSecondary} />
-                  </TouchableOpacity>
-                </Swipeable>
-              )}
+                        {h.createdAt && (
+                          <Text style={{ color: colors.textSecondary, fontSize: 11, marginTop: 2 }}>
+                            {new Date(h.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </Text>
+                        )}
+                      </View>
+                      {/* Rename hint icon */}
+                      <TouchableOpacity
+                        onPress={() => setRenameTarget({ id: h._id!, current: displayName })}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        style={{
+                          width: 30, height: 30, borderRadius: 8,
+                          backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#f3f4f6',
+                          alignItems: 'center', justifyContent: 'center',
+                        }}
+                      >
+                        <Ionicons name="pencil-outline" size={13} color={colors.textSecondary} />
+                      </TouchableOpacity>
+                      <Ionicons name="chevron-forward" size={14} color={colors.textSecondary} />
+                    </TouchableOpacity>
+                  </Swipeable>
+                );
+              }}
             />
           )}
-        </View>
+              </View>
+            </TouchableOpacity>
+          </KeyboardAvoidingView>
+        </TouchableOpacity>
       </Modal>
     </SafeAreaView>
   );
