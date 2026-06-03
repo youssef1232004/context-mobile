@@ -161,7 +161,7 @@ export default function SearchScreen() {
         ListHeaderComponent={
           <>
             {/* ── Header ── */}
-            <View style={{ marginBottom: Spacing.sm }}>
+            <View style={{ marginBottom: Spacing.md, marginTop: Spacing.xl }}>
               <Text style={{
                 fontSize: Typography.sizes.sm, fontWeight: '600',
                 color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1.5,
@@ -182,7 +182,7 @@ export default function SearchScreen() {
               backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : colors.surface,
               borderRadius: BorderRadius.xl, borderWidth: 1,
               borderColor: isDark ? 'rgba(255,255,255,0.12)' : colors.border,
-              paddingHorizontal: Spacing.md, paddingVertical: 12,
+              paddingHorizontal: Spacing.md, paddingVertical: 14,
               marginBottom: Spacing.md,
             }}>
               {loading
@@ -202,6 +202,7 @@ export default function SearchScreen() {
                 style={{
                   flex: 1, fontSize: Typography.sizes.base,
                   color: colors.text, fontWeight: '500',
+                  padding: 0, paddingVertical: 0, // fixes vertical centering on android
                 }}
               />
               {query.length > 0 && !loading && (

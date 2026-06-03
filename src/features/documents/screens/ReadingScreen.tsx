@@ -22,6 +22,8 @@ import { documentService, type Document } from '../api/documentService';
 import { api } from '../../../services/api';
 import { secureStorage } from '../../../services/secureStorage';
 import { Spacing, Typography, BorderRadius } from '../../../theme';
+import { useSelector } from 'react-redux';
+import type { RootState } from '../../../store/store';
 import { ExcelViewer } from '../components/viewers/ExcelViewer';
 import { getTagColor } from '../../../utils/tagUtils';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -91,6 +93,16 @@ export default function ReadingScreen({ route, navigation }: Props) {
       } finally { setLoading(false); }
     })();
   }, [documentId]);
+
+  // ── Sync aiStatus from SSE updates (Redux) into local doc state ──
+  const reduxDocuments = useSelector((state: RootState) => state.folder.documents);
+  useEffect(() => {
+    if (!doc || !documentId) return;
+    const match = reduxDocuments.find(d => d._id === documentId);
+    if (match && match.aiStatus !== doc.aiStatus) {
+      setDoc(prev => prev ? { ...prev, aiStatus: match.aiStatus } : prev);
+    }
+  }, [reduxDocuments, documentId]);
 
   // Load chat history when panel opens
   useEffect(() => {
@@ -361,6 +373,19 @@ export default function ReadingScreen({ route, navigation }: Props) {
                   backgroundColor: doc.aiStatus === 'Analyzed' ? '#10b981' : doc.aiStatus === 'Failed' ? '#ef4444' : '#f59e0b'
                 }} />
                 <Text style={{ fontSize: 11, color: colors.textSecondary, fontWeight: '500' }}>{doc.aiStatus}</Text>
+                {doc.aiStatus === 'Failed' && (
+                  <TouchableOpacity 
+                    onPress={handleReanalyze} 
+                    disabled={reanalyzing} 
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginLeft: 4, paddingHorizontal: 6, paddingVertical: 2, backgroundColor: 'rgba(239,68,68,0.1)', borderRadius: 6 }}
+                  >
+                    {reanalyzing
+                      ? <ActivityIndicator size={10} color="#ef4444" />
+                      : <Ionicons name="refresh" size={11} color="#ef4444" />
+                    }
+                    <Text style={{ fontSize: 10, fontWeight: '700', color: '#ef4444' }}>{reanalyzing ? 'Retrying…' : 'Retry'}</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             )}
           </View>
@@ -371,16 +396,6 @@ export default function ReadingScreen({ route, navigation }: Props) {
               {downloading
                 ? <ActivityIndicator size="small" color={colors.primary} />
                 : <Ionicons name="download-outline" size={18} color={colors.primary} />
-              }
-            </TouchableOpacity>
-          )}
-
-          {/* Reanalyze button */}
-          {doc?.aiStatus === 'Failed' && (
-            <TouchableOpacity onPress={handleReanalyze} disabled={reanalyzing} style={{ padding: 4 }}>
-              {reanalyzing
-                ? <ActivityIndicator size="small" color="#ef4444" />
-                : <Ionicons name="refresh-circle" size={20} color="#ef4444" />
               }
             </TouchableOpacity>
           )}
@@ -559,25 +574,27 @@ export default function ReadingScreen({ route, navigation }: Props) {
                   </View>
                 </Card>
 
-                {/* Content preview */}
-                {textContent ? (
-                  <Card title="Content" headerIcon={<Ionicons name="reader-outline" size={18} color={colors.primary} />}>
-                    <Text style={{ fontSize: Typography.sizes.sm, color: colors.text, lineHeight: 22, fontWeight: '400' }}>
-                      {textContent}
-                    </Text>
-                  </Card>
-                ) : (
-                  <View style={{
-                    alignItems: 'center', gap: Spacing.md, padding: Spacing['2xl'],
-                    borderRadius: BorderRadius.xl, borderWidth: 1, borderStyle: 'dashed',
-                    borderColor: isDark ? 'rgba(255,255,255,0.1)' : colors.border,
-                  }}>
-                    <Ionicons name="reader-outline" size={36} color={colors.textSecondary} />
-                    <Text style={{ fontSize: Typography.sizes.base, fontWeight: '600', color: colors.text }}>No extracted text</Text>
-                    <Text style={{ fontSize: Typography.sizes.sm, color: colors.textSecondary, textAlign: 'center' }}>
-                      {doc.cloudinaryUrl ? 'Switch to "Original" view to see the file.' : 'No content available for this document.'}
-                    </Text>
-                  </View>
+                {/* Content preview — only for Images and TextSnippets */}
+                {(isImage || isText) && (
+                  textContent ? (
+                    <Card title="Content" headerIcon={<Ionicons name="reader-outline" size={18} color={colors.primary} />}>
+                      <Text style={{ fontSize: Typography.sizes.sm, color: colors.text, lineHeight: 22, fontWeight: '400' }}>
+                        {textContent}
+                      </Text>
+                    </Card>
+                  ) : (
+                    <View style={{
+                      alignItems: 'center', gap: Spacing.md, padding: Spacing['2xl'],
+                      borderRadius: BorderRadius.xl, borderWidth: 1, borderStyle: 'dashed',
+                      borderColor: isDark ? 'rgba(255,255,255,0.1)' : colors.border,
+                    }}>
+                      <Ionicons name="reader-outline" size={36} color={colors.textSecondary} />
+                      <Text style={{ fontSize: Typography.sizes.base, fontWeight: '600', color: colors.text }}>No extracted text</Text>
+                      <Text style={{ fontSize: Typography.sizes.sm, color: colors.textSecondary, textAlign: 'center' }}>
+                        {doc.cloudinaryUrl ? 'Switch to "Original" view to see the file.' : 'No content available for this document.'}
+                      </Text>
+                    </View>
+                  )
                 )}
               </>
             )}

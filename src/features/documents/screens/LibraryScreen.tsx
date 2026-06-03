@@ -40,6 +40,102 @@ const FILE_ICONS: Record<string, { name: React.ComponentProps<typeof Ionicons>['
   TextSnippet: { name: 'reader',        color: '#f59e0b' },
 };
 
+// ── Optimized List Item Component ──
+const DocumentItem = React.memo(({
+  doc,
+  selected,
+  isSelecting,
+  isDark,
+  colors,
+  onPress,
+  onLongPress,
+  onActionPress,
+}: {
+  doc: Document;
+  selected: boolean;
+  isSelecting: boolean;
+  isDark: boolean;
+  colors: any;
+  onPress: () => void;
+  onLongPress: () => void;
+  onActionPress: () => void;
+}) => {
+  const ic = FILE_ICONS[doc.fileType] || { name: 'document-outline' as const, color: colors.textSecondary };
+  const d = new Date(doc.updatedAt);
+  const now = new Date();
+  const dateStr = d.toDateString() === now.toDateString() 
+    ? `Today, ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` 
+    : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+  return (
+    <AnimatedPressable
+      scaleTo={0.97}
+      onPress={onPress}
+      onLongPress={onLongPress}
+      style={{
+        flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, padding: Spacing.md,
+        borderRadius: BorderRadius.xl, borderWidth: 1,
+        borderColor: selected ? colors.primary : (isDark ? 'rgba(255,255,255,0.08)' : colors.border),
+        backgroundColor: selected ? (isDark ? 'rgba(99,102,241,0.12)' : 'rgba(99,102,241,0.06)') : (isDark ? 'rgba(255,255,255,0.03)' : colors.surface),
+        marginBottom: Spacing.sm
+      }}>
+      {/* Selection indicator */}
+      {isSelecting && (
+        <View style={{
+          width: 22, height: 22, borderRadius: 11, borderWidth: 2,
+          borderColor: selected ? colors.primary : colors.border,
+          backgroundColor: selected ? colors.primary : 'transparent',
+          alignItems: 'center', justifyContent: 'center',
+        }}>
+          {selected && <Ionicons name="checkmark" size={13} color={isDark ? '#000' : '#fff'} />}
+        </View>
+      )}
+
+      {/* Icon */}
+      <View style={{ width: 42, height: 42, borderRadius: 12, backgroundColor: `${ic.color}18`, alignItems: 'center', justifyContent: 'center' }}>
+        <Ionicons name={ic.name} size={20} color={ic.color} />
+      </View>
+
+      {/* Info */}
+      <View style={{ flex: 1, gap: 3 }}>
+        <Text style={{ fontSize: Typography.sizes.sm, fontWeight: '700', color: colors.text }} numberOfLines={1}>{doc.title}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Text style={{ fontSize: 11, fontWeight: '500', color: colors.textSecondary }}>{doc.fileType} · {dateStr}</Text>
+        </View>
+        {/* Tags */}
+        {doc.tags && doc.tags.length > 0 && (
+          <View style={{ flexDirection: 'row', gap: 4, marginTop: 2 }}>
+            {doc.tags.slice(0, 2).map((tag: string) => {
+              const tColor = getTagColor(tag, isDark);
+              return (
+                <Text key={tag} style={{ fontSize: 9, fontWeight: '700', color: tColor.text, backgroundColor: tColor.bg, borderWidth: 1, borderColor: tColor.border, paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4, overflow: 'hidden' }}>#{tag}</Text>
+              );
+            })}
+            {doc.tags.length > 2 && <Text style={{ fontSize: 9, fontWeight: '700', color: colors.textSecondary }}>+{doc.tags.length - 2}</Text>}
+          </View>
+        )}
+      </View>
+
+      {/* Cognitive load */}
+      <CognitiveLoadBadge load={doc.cognitiveLoad} compact />
+
+      {/* Three-dot menu */}
+      {!isSelecting && (
+        <TouchableOpacity onPress={onActionPress} style={{ padding: 4 }} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <Ionicons name="ellipsis-vertical" size={16} color={colors.textSecondary} />
+        </TouchableOpacity>
+      )}
+    </AnimatedPressable>
+  );
+}, (prevProps, nextProps) => {
+  return (
+    prevProps.doc === nextProps.doc &&
+    prevProps.selected === nextProps.selected &&
+    prevProps.isSelecting === nextProps.isSelecting &&
+    prevProps.isDark === nextProps.isDark
+  );
+});
+
 export default function LibraryScreen({ navigation }: Props) {
   const { colors, isDark } = useTheme();
   const { toast, showToast, hideToast } = useToast();
@@ -91,6 +187,13 @@ export default function LibraryScreen({ navigation }: Props) {
 
   useEffect(() => { fetchContents(currentFolder?._id, 1); }, [sortBy, sortOrder]);
   useEffect(() => { const t = setTimeout(() => fetchContents(currentFolder?._id, 1), 400); return () => clearTimeout(t); }, [search]);
+
+  // ── Auto-refresh when screen regains focus (e.g. returning from Capture after upload) ──
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchContents(currentFolder?._id, 1);
+    }, [currentFolder?._id, search, sortBy, sortOrder])
+  );
 
   // ── Hardware Back Button Interceptor ──
   // Only active when LibraryScreen is focused (not when ReadingScreen is on top)
@@ -269,22 +372,28 @@ export default function LibraryScreen({ navigation }: Props) {
     }
   };
 
-  // ── Helpers ──
-  const getIcon = (ft: string) => FILE_ICONS[ft] || { name: 'document-outline' as const, color: colors.textSecondary };
-
-  const formatDate = (iso: string) => {
-    const d = new Date(iso);
-    const now = new Date();
-    if (d.toDateString() === now.toDateString()) return `Today, ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  };
-
   // Bug #5: Labels now match the Web dashboard exactly
   const SORT_OPTIONS = [
     { key: 'updatedAt', label: 'Last Modified' },
     { key: 'title', label: 'Name' },
     { key: 'cognitiveLoad', label: 'Cognitive Load' },
   ];
+
+  const renderDocumentItem = useCallback(({ item: doc }: { item: Document }) => {
+    const selected = selectedDocIds.includes(doc._id);
+    return (
+      <DocumentItem
+        doc={doc}
+        selected={selected}
+        isSelecting={isSelecting}
+        isDark={isDark}
+        colors={colors}
+        onPress={() => isSelecting ? toggleSelectDoc(doc._id) : navigation.navigate('Reading', { documentId: doc._id })}
+        onLongPress={() => toggleSelectDoc(doc._id)}
+        onActionPress={() => setActionDoc(doc)}
+      />
+    );
+  }, [selectedDocIds, isSelecting, isDark, colors, navigation]);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
@@ -481,70 +590,7 @@ export default function LibraryScreen({ navigation }: Props) {
             {documents.length > 0 && folders.length > 0 && <Text style={{ fontSize: 11, fontFamily: Typography.families.mono, fontWeight: '700', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1, marginTop: Spacing.sm }}>Files</Text>}
           </View>
         }
-        renderItem={({ item: doc }) => {
-              const ic = getIcon(doc.fileType);
-              const selected = selectedDocIds.includes(doc._id);
-              return (
-                <AnimatedPressable
-                  scaleTo={0.97}
-                  onPress={() => isSelecting ? toggleSelectDoc(doc._id) : navigation.navigate('Reading', { documentId: doc._id })}
-                  onLongPress={() => toggleSelectDoc(doc._id)}
-                  style={{
-                    flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, padding: Spacing.md,
-                    borderRadius: BorderRadius.xl, borderWidth: 1,
-                    borderColor: selected ? colors.primary : (isDark ? 'rgba(255,255,255,0.08)' : colors.border),
-                    backgroundColor: selected ? (isDark ? 'rgba(99,102,241,0.12)' : 'rgba(99,102,241,0.06)') : (isDark ? 'rgba(255,255,255,0.03)' : colors.surface),
-                    marginBottom: Spacing.sm
-                  }}>
-                  {/* Selection indicator */}
-                  {isSelecting && (
-                    <View style={{
-                      width: 22, height: 22, borderRadius: 11, borderWidth: 2,
-                      borderColor: selected ? colors.primary : colors.border,
-                      backgroundColor: selected ? colors.primary : 'transparent',
-                      alignItems: 'center', justifyContent: 'center',
-                    }}>
-                      {selected && <Ionicons name="checkmark" size={13} color={isDark ? '#000' : '#fff'} />}
-                    </View>
-                  )}
-
-                  {/* Icon */}
-                  <View style={{ width: 42, height: 42, borderRadius: 12, backgroundColor: `${ic.color}18`, alignItems: 'center', justifyContent: 'center' }}>
-                    <Ionicons name={ic.name} size={20} color={ic.color} />
-                  </View>
-
-                  {/* Info */}
-                  <View style={{ flex: 1, gap: 3 }}>
-                    <Text style={{ fontSize: Typography.sizes.sm, fontWeight: '700', color: colors.text }} numberOfLines={1}>{doc.title}</Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <Text style={{ fontSize: 11, fontWeight: '500', color: colors.textSecondary }}>{doc.fileType} · {formatDate(doc.updatedAt)}</Text>
-                    </View>
-                    {/* Tags */}
-                    {doc.tags && doc.tags.length > 0 && (
-                      <View style={{ flexDirection: 'row', gap: 4, marginTop: 2 }}>
-                        {doc.tags.slice(0, 2).map((tag) => {
-                          const tColor = getTagColor(tag, isDark);
-                          return (
-                            <Text key={tag} style={{ fontSize: 9, fontWeight: '700', color: tColor.text, backgroundColor: tColor.bg, borderWidth: 1, borderColor: tColor.border, paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4, overflow: 'hidden' }}>#{tag}</Text>
-                          );
-                        })}
-                        {doc.tags.length > 2 && <Text style={{ fontSize: 9, fontWeight: '700', color: colors.textSecondary }}>+{doc.tags.length - 2}</Text>}
-                      </View>
-                    )}
-                  </View>
-
-                  {/* Cognitive load */}
-                  <CognitiveLoadBadge load={doc.cognitiveLoad} compact />
-
-                  {/* Three-dot menu */}
-                  {!isSelecting && (
-                    <TouchableOpacity onPress={() => setActionDoc(doc)} style={{ padding: 4 }} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                      <Ionicons name="ellipsis-vertical" size={16} color={colors.textSecondary} />
-                    </TouchableOpacity>
-                  )}
-                </AnimatedPressable>
-              );
-        }}
+        renderItem={renderDocumentItem}
         ListEmptyComponent={
           !loading && documents.length === 0 && folders.length === 0 ? (
             <View style={{ alignItems: 'center', gap: Spacing.md, paddingTop: Spacing['3xl'] }}>
