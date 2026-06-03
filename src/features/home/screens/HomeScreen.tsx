@@ -7,6 +7,8 @@ import {
   TouchableOpacity,
   RefreshControl,
   Dimensions,
+  ActivityIndicator,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,6 +16,8 @@ import { useTheme } from '../../../context/ThemeContext';
 import { useAppSelector } from '../../../store/hooks';
 import { Card } from '../../../components/Card';
 import { Badge } from '../../../components/Badge';
+import { Button } from '../../../components/Button';
+import { getTagColor } from '../../../utils/tagUtils';
 import { CognitiveLoadBadge } from '../../../components/CognitiveLoadBadge';
 import { SkeletonLoader } from '../../../components/SkeletonLoader';
 import { AnimatedPressable } from '../../../components/AnimatedPressable';
@@ -92,174 +96,211 @@ export default function HomeScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
       >
         {/* ─── Greeting ─── */}
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <View>
-            <Text style={{ fontSize: Typography.sizes.sm, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1.5 }}>
+            <Text style={{ fontFamily: Typography.families.mono, fontSize: Typography.sizes.sm, fontWeight: '700', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1.5 }}>
               Dashboard
             </Text>
-            <Text style={{ fontSize: Typography.sizes['3xl'], fontWeight: '800', color: colors.text, marginTop: 4 }}>
+            <Text style={{ fontFamily: Typography.families.display, fontSize: Typography.sizes['3xl'], color: colors.text, marginTop: 4 }}>
               Welcome back,{'\n'}
               <Text style={{ color: colors.primary }}>{user?.fullName || 'User'}</Text>
             </Text>
           </View>
           <TouchableOpacity 
             onPress={() => navigation.navigate('Profile')}
-            style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : colors.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.05)' : colors.border }}
+            style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : colors.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.05)' : colors.border, overflow: 'hidden' }}
           >
-            <Ionicons name="person" size={20} color={colors.primary} />
+            {user?.avatar ? (
+              <Image source={{ uri: user.avatar }} style={{ width: '100%', height: '100%' }} />
+            ) : (
+              <Ionicons name="person" size={24} color={colors.primary} />
+            )}
           </TouchableOpacity>
         </View>
 
-        {/* ─── Stats Row ─── */}
-        <View style={{ flexDirection: 'row', gap: Spacing.md }}>
-          {[
-            { icon: 'document-text-outline' as const, count: totalDocs, label: 'Documents', color: colors.primary },
-            { icon: 'folder-outline' as const,        count: folderCount, label: 'Folders',   color: '#f59e0b' },
-          ].map((s) => (
-            <Card key={s.label} style={{ flex: 1 }}>
-              <View style={{ alignItems: 'center', gap: 6 }}>
-                <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: `${s.color}18`, alignItems: 'center', justifyContent: 'center' }}>
-                  <Ionicons name={s.icon} size={24} color={s.color} />
-                </View>
-                <Text style={{ fontSize: Typography.sizes['2xl'], fontWeight: '800', color: colors.text }}>
-                  {loading ? '–' : s.count}
-                </Text>
-                <Text style={{ fontSize: Typography.sizes.xs, fontWeight: '600', color: colors.textSecondary }}>{s.label}</Text>
-              </View>
-            </Card>
-          ))}
-        </View>
+        {/* ─── Main Content ─── */}
+        {loading && !refreshing && totalDocs === 0 && folderCount === 0 ? (
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: Spacing['4xl'] }}>
+            <ActivityIndicator size="large" color={colors.primary} />
+          </View>
+        ) : totalDocs === 0 && folderCount === 0 ? (
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: Spacing['4xl'], paddingHorizontal: Spacing.md }}>
+            <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: isDark ? 'rgba(99,102,241,0.1)' : 'rgba(16,55,102,0.05)', alignItems: 'center', justifyContent: 'center', marginBottom: Spacing.xl, borderWidth: 1, borderColor: isDark ? 'rgba(99,102,241,0.2)' : 'rgba(16,55,102,0.1)' }}>
+              <Ionicons name="cube-outline" size={40} color={colors.primary} />
+            </View>
+            <Text style={{ fontFamily: Typography.families.display, fontSize: Typography.sizes['4xl'], color: colors.text, textAlign: 'center', lineHeight: 42 }}>
+              Welcome to your{'\n'}
+              <Text style={{ color: colors.primary }}>new second brain.</Text>
+            </Text>
+            <Text style={{ fontSize: Typography.sizes.base, color: colors.textSecondary, textAlign: 'center', marginTop: Spacing.lg, lineHeight: 24, paddingHorizontal: Spacing.lg }}>
+              Context is ready. To get started, upload files or paste raw text to define your semantic intent.
+            </Text>
 
-        {/* ─── Suggested Focus ─── */}
-        {loading ? (
-          <SkeletonLoader count={1} type="card" />
-        ) : focusDoc ? (
-          <AnimatedPressable
-            scaleTo={0.98}
-            onPress={() => navigation.navigate('Library', { screen: 'Reading', params: { documentId: focusDoc._id } })}
-          >
-            <Card
-              title="Suggested Focus"
-              subtitle="AI-recommended next read"
-              headerIcon={<Ionicons name="sparkles" size={18} color="#f59e0b" />}
-            >
-              <View style={{ gap: Spacing.md }}>
-                {/* Title row */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm }}>
-                  <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: `${getIcon(focusDoc.fileType).color}18`, alignItems: 'center', justifyContent: 'center' }}>
-                    <Ionicons name={getIcon(focusDoc.fileType).name} size={20} color={getIcon(focusDoc.fileType).color} />
-                  </View>
-                  <View style={{ flex: 1, gap: 2 }}>
-                    <Text style={{ fontSize: Typography.sizes.base, fontWeight: '700', color: colors.text }} numberOfLines={1}>
-                      {focusDoc.title}
+            <View style={{ width: '100%', flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing['2xl'], paddingHorizontal: Spacing.md }}>
+              <Button
+                title="Upload File"
+                onPress={() => navigation.navigate('Capture', { mode: 'file' })}
+                style={{ flex: 1, paddingHorizontal: 8 }}
+                textStyle={{ fontSize: 14 }}
+                icon={<Ionicons name="cloud-upload-outline" size={18} color={isDark ? '#000' : '#fff'} />}
+              />
+              <Button
+                title="Paste Text"
+                variant="outline"
+                onPress={() => navigation.navigate('Capture', { mode: 'text' })}
+                style={{ flex: 1, paddingHorizontal: 8 }}
+                textStyle={{ fontSize: 14 }}
+                icon={<Ionicons name="document-text-outline" size={18} color={colors.primary} />}
+              />
+            </View>
+          </View>
+        ) : (
+          <View style={{ gap: Spacing.xl }}>
+            {/* ─── Stats Row ─── */}
+            <View style={{ flexDirection: 'row', gap: Spacing.md }}>
+              {[
+                { icon: 'document-text-outline' as const, count: totalDocs, label: 'Documents', color: colors.primary },
+                { icon: 'folder-outline' as const,        count: folderCount, label: 'Folders',   color: '#f59e0b' },
+              ].map((s) => (
+                <Card key={s.label} style={{ flex: 1 }}>
+                  <View style={{ alignItems: 'center', gap: 6 }}>
+                    <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: `${s.color}18`, alignItems: 'center', justifyContent: 'center' }}>
+                      <Ionicons name={s.icon} size={24} color={s.color} />
+                    </View>
+                    <Text style={{ fontFamily: Typography.families.mono, fontSize: Typography.sizes['2xl'], fontWeight: '800', color: colors.text }}>
+                      {loading ? '–' : s.count}
                     </Text>
-                    <Text style={{ fontSize: Typography.sizes.xs, color: colors.textSecondary, fontWeight: '500' }}>
-                      {focusDoc.fileType} · {relativeDate(focusDoc.updatedAt)}
-                    </Text>
+                    <Text style={{ fontFamily: Typography.families.mono, fontSize: Typography.sizes.xs, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 }}>{s.label}</Text>
                   </View>
-                  <CognitiveLoadBadge load={focusDoc.cognitiveLoad} />
-                </View>
+                </Card>
+              ))}
+            </View>
 
-                {/* Summary preview */}
-                <Text
-                  style={{ fontSize: Typography.sizes.sm, color: colors.textSecondary, lineHeight: 20, fontStyle: focusDoc.summary ? 'normal' : 'italic' }}
-                  numberOfLines={3}
+            {/* ─── Suggested Focus ─── */}
+            {loading ? (
+              <SkeletonLoader count={1} type="card" />
+            ) : focusDoc ? (
+              <AnimatedPressable
+                scaleTo={0.98}
+                onPress={() => navigation.navigate('Library', { screen: 'Reading', params: { documentId: focusDoc._id } })}
+              >
+                <Card
+                  title="Suggested Focus"
+                  subtitle="AI-recommended next read"
+                  headerIcon={<Ionicons name="sparkles" size={18} color="#f59e0b" />}
                 >
-                  {focusDoc.summary || 'AI analysis pending — summary will appear once processing completes.'}
-                </Text>
-
-                {/* Tags */}
-                {focusDoc.tags && focusDoc.tags.length > 0 && (
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-                    {focusDoc.tags.slice(0, 4).map((tag) => (
-                      <View
-                        key={tag}
-                        style={{
-                          paddingHorizontal: 8,
-                          paddingVertical: 3,
-                          borderRadius: BorderRadius.full,
-                          backgroundColor: isDark ? 'rgba(99,102,241,0.15)' : 'rgba(99,102,241,0.08)',
-                          borderWidth: 1,
-                          borderColor: isDark ? 'rgba(99,102,241,0.3)' : 'rgba(99,102,241,0.15)',
-                        }}
-                      >
-                        <Text style={{ fontSize: 10, fontWeight: '700', color: colors.primary, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                          {tag}
+                  <View style={{ gap: Spacing.md }}>
+                    {/* Title row */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm }}>
+                      <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: `${getIcon(focusDoc.fileType).color}18`, alignItems: 'center', justifyContent: 'center' }}>
+                        <Ionicons name={getIcon(focusDoc.fileType).name} size={20} color={getIcon(focusDoc.fileType).color} />
+                      </View>
+                      <View style={{ flex: 1, gap: 2 }}>
+                        <Text style={{ fontSize: Typography.sizes.base, fontWeight: '700', color: colors.text }} numberOfLines={1}>
+                          {focusDoc.title}
+                        </Text>
+                        <Text style={{ fontSize: Typography.sizes.xs, color: colors.textSecondary, fontWeight: '500' }}>
+                          {focusDoc.fileType} · {relativeDate(focusDoc.updatedAt)}
                         </Text>
                       </View>
-                    ))}
-                  </View>
-                )}
-              </View>
-            </Card>
-          </AnimatedPressable>
-        ) : (
-          <Card>
-            <View style={{ alignItems: 'center', gap: Spacing.md, paddingVertical: Spacing.xl }}>
-              <Ionicons name="cloud-upload-outline" size={40} color={colors.textSecondary} />
-              <Text style={{ fontSize: Typography.sizes.base, fontWeight: '700', color: colors.text }}>No documents yet</Text>
-              <Text style={{ fontSize: Typography.sizes.sm, color: colors.textSecondary, textAlign: 'center' }}>
-                Head to the Capture tab to upload your first document.
-              </Text>
-            </View>
-          </Card>
-        )}
-
-        {/* ─── Recent Files ─── */}
-        {!loading && documents.length > 0 && (
-          <View style={{ gap: Spacing.md }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Text style={{ fontSize: Typography.sizes.lg, fontWeight: '800', color: colors.text }}>Recent Files</Text>
-              <TouchableOpacity onPress={() => navigation.navigate('Library')}>
-                <Text style={{ fontSize: Typography.sizes.sm, fontWeight: '700', color: colors.primary }}>See All</Text>
-              </TouchableOpacity>
-            </View>
-
-            <FlatList
-              data={documents}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              keyExtractor={(item) => item._id}
-              contentContainerStyle={{ gap: Spacing.md }}
-              windowSize={5}
-              initialNumToRender={4}
-              maxToRenderPerBatch={4}
-              removeClippedSubviews={true}
-              renderItem={({ item }) => {
-                const ic = getIcon(item.fileType);
-                return (
-                  <AnimatedPressable
-                    scaleTo={0.96}
-                    onPress={() => navigation.navigate('Library', { screen: 'Reading', params: { documentId: item._id } })}
-                    style={{
-                      width: CARD_WIDTH,
-                      padding: Spacing.md,
-                      borderRadius: BorderRadius.xl,
-                      borderWidth: 1,
-                      borderColor: isDark ? 'rgba(255,255,255,0.08)' : colors.border,
-                      backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : colors.surface,
-                      gap: Spacing.sm,
-                    }}
-                  >
-                    {/* Icon + type */}
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: `${ic.color}18`, alignItems: 'center', justifyContent: 'center' }}>
-                        <Ionicons name={ic.name} size={18} color={ic.color} />
-                      </View>
-                      <CognitiveLoadBadge load={item.cognitiveLoad} compact />
+                      <CognitiveLoadBadge load={focusDoc.cognitiveLoad} />
                     </View>
-                    {/* Title */}
-                    <Text style={{ fontSize: Typography.sizes.sm, fontWeight: '700', color: colors.text, marginTop: 4 }} numberOfLines={2}>
-                      {item.title}
+
+                    {/* Summary preview */}
+                    <Text
+                      style={{ fontSize: Typography.sizes.sm, color: colors.textSecondary, lineHeight: 20, fontStyle: focusDoc.summary ? 'normal' : 'italic' }}
+                      numberOfLines={3}
+                    >
+                      {focusDoc.summary || 'AI analysis pending — summary will appear once processing completes.'}
                     </Text>
-                    {/* Date */}
-                    <Text style={{ fontSize: 11, fontWeight: '500', color: colors.textSecondary }}>
-                      {relativeDate(item.updatedAt)}
-                    </Text>
-                  </AnimatedPressable>
-                );
-              }}
-            />
+
+                    {/* Tags */}
+                    {focusDoc.tags && focusDoc.tags.length > 0 && (
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                        {focusDoc.tags.slice(0, 4).map((tag) => {
+                          const tColor = getTagColor(tag, isDark);
+                          return (
+                            <View
+                              key={tag}
+                              style={{
+                                paddingHorizontal: 8,
+                                paddingVertical: 3,
+                                borderRadius: BorderRadius.full,
+                                backgroundColor: tColor.bg,
+                                borderWidth: 1,
+                                borderColor: tColor.border,
+                              }}
+                            >
+                              <Text style={{ fontFamily: Typography.families.mono, fontSize: 10, fontWeight: '700', color: tColor.text, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                                {tag}
+                              </Text>
+                            </View>
+                          );
+                        })}
+                      </View>
+                    )}
+                  </View>
+                </Card>
+              </AnimatedPressable>
+            ) : null}
+
+            {/* ─── Recent Files ─── */}
+            {!loading && documents.length > 0 && (
+              <View style={{ gap: Spacing.md }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={{ fontFamily: Typography.families.display, fontSize: Typography.sizes.lg, color: colors.text }}>Recent Files</Text>
+                  <TouchableOpacity onPress={() => navigation.navigate('Library')}>
+                    <Text style={{ fontFamily: Typography.families.mono, fontSize: Typography.sizes.xs, fontWeight: '700', color: colors.primary, textTransform: 'uppercase', letterSpacing: 1 }}>See All</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <FlatList
+                  data={documents}
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  keyExtractor={(item) => item._id}
+                  contentContainerStyle={{ gap: Spacing.md }}
+                  windowSize={5}
+                  initialNumToRender={4}
+                  maxToRenderPerBatch={4}
+                  removeClippedSubviews={true}
+                  renderItem={({ item }) => {
+                    const ic = getIcon(item.fileType);
+                    return (
+                      <AnimatedPressable
+                        scaleTo={0.96}
+                        onPress={() => navigation.navigate('Library', { screen: 'Reading', params: { documentId: item._id } })}
+                        style={{
+                          width: CARD_WIDTH,
+                          padding: Spacing.md,
+                          borderRadius: BorderRadius.xl,
+                          borderWidth: 1,
+                          borderColor: isDark ? 'rgba(255,255,255,0.08)' : colors.border,
+                          backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : colors.surface,
+                          gap: Spacing.sm,
+                        }}
+                      >
+                        {/* Icon + type */}
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: `${ic.color}18`, alignItems: 'center', justifyContent: 'center' }}>
+                            <Ionicons name={ic.name} size={18} color={ic.color} />
+                          </View>
+                          <CognitiveLoadBadge load={item.cognitiveLoad} compact />
+                        </View>
+                        {/* Title */}
+                        <Text style={{ fontSize: Typography.sizes.sm, fontWeight: '700', color: colors.text, marginTop: 4 }} numberOfLines={2}>
+                          {item.title}
+                        </Text>
+                        {/* Date */}
+                        <Text style={{ fontSize: 11, fontWeight: '500', color: colors.textSecondary }}>
+                          {relativeDate(item.updatedAt)}
+                        </Text>
+                      </AnimatedPressable>
+                    );
+                  }}
+                />
+              </View>
+            )}
           </View>
         )}
 

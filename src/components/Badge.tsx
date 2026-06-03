@@ -44,6 +44,7 @@ export const Badge: React.FC<BadgeProps> = ({
     >
       <Text
         style={{
+          fontFamily: Typography.families.mono,
           fontSize: Typography.sizes.xs,
           fontWeight: Typography.weights.bold,
           color: c.text,

@@ -19,7 +19,11 @@ export const Typography = {
     black: '900' as const,
   },
   families: {
-    sans: 'System',
-    mono: 'SpaceMono',
+    display: 'Rajdhani-Bold',
+    body: 'Inter-Regular',
+    bodyMedium: 'Inter-Medium',
+    bodyBold: 'Inter-Bold',
+    mono: 'JetBrainsMono-Bold',
+    code: 'FiraCode-Regular',
   },
 } as const;

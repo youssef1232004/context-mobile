@@ -17,6 +17,7 @@ import { useTheme } from '../../../context/ThemeContext';
 import { Input } from '../../../components/Input';
 import { Card } from '../../../components/Card';
 import { Button } from '../../../components/Button';
+import { SectionLabel } from '../../../components/SectionLabel';
 import { useAppDispatch, useAppSelector } from '../../../store/hooks';
 import { updateProfile, logout } from '../../../store/authSlice';
 import { authService } from '../../../features/auth/api/authService';
@@ -29,10 +30,10 @@ import { Spacing, BorderRadius, Typography } from '../../../theme';
  * user.model.ts → enum: ['General', 'Engineer', 'Analyst', 'Marketer']
  */
 const PERSONAS = [
-  { id: 'General',  label: 'General',      desc: 'Broad, everyday use' },
-  { id: 'Marketer', label: 'Professional',  desc: 'Business & content focus' },
-  { id: 'Analyst',  label: 'Student',       desc: 'Learning & research focused' },
-  { id: 'Engineer', label: 'Developer',     desc: 'Technical & in-depth' },
+  { id: 'general',  label: 'General',      desc: 'Broad, everyday use' },
+  { id: 'professional', label: 'Professional',  desc: 'Business & content focus' },
+  { id: 'student',  label: 'Student',       desc: 'Learning & research focused' },
+  { id: 'developer', label: 'Developer',     desc: 'Technical & in-depth' },
 ] as const;
 
 type PersonaId = typeof PERSONAS[number]['id'];
@@ -89,7 +90,7 @@ export default function ProfileScreen({ navigation }: Props) {
       const match = /\.(\w+)$/.exec(filename);
       const type = match ? `image/${match[1]}` : 'image/jpeg';
 
-      formData.append('file', {
+      formData.append('avatar', {
         uri: asset.uri,
         name: filename,
         type,
@@ -265,9 +266,7 @@ export default function ProfileScreen({ navigation }: Props) {
 
               {/* Persona Dropdown */}
               <View>
-                <Text style={{ fontSize: Typography.sizes.xs, fontWeight: '700', color: colors.primary, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8, marginLeft: 4 }}>
-                  Semantic Persona
-                </Text>
+                <SectionLabel text="Semantic Persona" style={{ marginBottom: 8, marginLeft: 4 }} />
                 <TouchableOpacity
                   onPress={() => setShowPersonaDropdown(!showPersonaDropdown)}
                   activeOpacity={0.8}

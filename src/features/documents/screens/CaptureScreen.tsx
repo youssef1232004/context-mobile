@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, TextInput, Animated, Keyboard,
 } from 'react-native';
@@ -11,6 +11,7 @@ import { useTheme } from '../../../context/ThemeContext';
 import { Card } from '../../../components/Card';
 import { Button } from '../../../components/Button';
 import { Toast } from '../../../components/Toast';
+import { SectionLabel } from '../../../components/SectionLabel';
 import { useToast } from '../../../hooks/useToast';
 import { documentService } from '../api/documentService';
 import { Spacing, Typography, BorderRadius } from '../../../theme';
@@ -33,12 +34,22 @@ interface PickedFile {
   size?: number;
 }
 
-export default function CaptureScreen() {
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+
+type Props = NativeStackScreenProps<any, 'Capture'>;
+
+export default function CaptureScreen({ route }: Props) {
   const { colors, isDark } = useTheme();
   const { toast, showToast, hideToast } = useToast();
 
   // ── Mode ──
-  const [mode, setMode] = useState<CaptureMode>('file');
+  const [mode, setMode] = useState<CaptureMode>((route?.params?.mode as CaptureMode) || 'file');
+
+  useEffect(() => {
+    if (route?.params?.mode) {
+      setMode(route.params.mode as CaptureMode);
+    }
+  }, [route?.params?.mode]);
 
   // ── File state ──
   const [pickedFiles, setPickedFiles] = useState<PickedFile[]>([]);
@@ -91,7 +102,7 @@ export default function CaptureScreen() {
           return true;
         })
         .map((a) => ({
-          name: a.name,
+          name: decodeURIComponent(a.name || 'document'),
           uri: a.uri,
           mimeType: a.mimeType || 'application/octet-stream',
           size: a.size,
@@ -126,7 +137,7 @@ export default function CaptureScreen() {
         showToast(`Image too large. Max 10 MB.`, 'error');
         return;
       }
-      const name = asset.fileName || `photo_${Date.now()}.jpg`;
+      const name = asset.fileName ? decodeURIComponent(asset.fileName) : `photo_${Date.now()}.jpg`;
       setPickedFiles((prev) => {
         const newFiles = [...prev, {
           name,
@@ -168,7 +179,7 @@ export default function CaptureScreen() {
           return true;
         })
         .map((a) => ({
-          name: a.fileName || `image_${Date.now()}.jpg`,
+          name: a.fileName ? decodeURIComponent(a.fileName) : `image_${Date.now()}.jpg`,
           uri: a.uri,
           mimeType: a.mimeType || 'image/jpeg',
           size: a.fileSize,
@@ -362,7 +373,9 @@ export default function CaptureScreen() {
                 {isUploading && (
                   <View style={{ gap: 6 }}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                      <Text style={{ fontSize: 11, fontWeight: '700', color: colors.textSecondary }}>Uploading…</Text>
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: colors.textSecondary }}>
+                        {uploadProgress === 100 ? 'Processing on server…' : 'Uploading…'}
+                      </Text>
                       <Text style={{ fontSize: 11, fontWeight: '800', color: colors.primary }}>{uploadProgress}%</Text>
                     </View>
                     <View style={{ height: 6, borderRadius: 3, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#e5e7eb', overflow: 'hidden' }}>
@@ -371,7 +384,7 @@ export default function CaptureScreen() {
                   </View>
                 )}
                 <Button
-                  title={isUploading ? 'Uploading…' : `Upload ${pickedFiles.length} File${pickedFiles.length > 1 ? 's' : ''}`}
+                  title={isUploading ? (uploadProgress === 100 ? 'Processing…' : 'Uploading…') : `Upload ${pickedFiles.length} File${pickedFiles.length > 1 ? 's' : ''}`}
                   onPress={handleUploadFiles}
                   loading={isUploading}
                   fullWidth
@@ -430,9 +443,7 @@ export default function CaptureScreen() {
           <View style={{ gap: Spacing.lg }}>
             {/* Title input */}
             <View style={{ gap: 6 }}>
-              <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1 }}>
-                Title (optional)
-              </Text>
+              <SectionLabel text="Title (optional)" color={colors.textSecondary} />
               <TextInput
                 value={textTitle}
                 onChangeText={setTextTitle}
@@ -449,9 +460,7 @@ export default function CaptureScreen() {
 
             {/* Text area */}
             <View style={{ gap: 6 }}>
-              <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1 }}>
-                Content
-              </Text>
+              <SectionLabel text="Content" color={colors.textSecondary} />
               <TextInput
                 value={pasteText}
                 onChangeText={(t) => { if (t.length <= MAX_TEXT_CHARS) setPasteText(t); }}

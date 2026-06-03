@@ -12,6 +12,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../context/ThemeContext';
 import { Input } from '../../../components/Input';
+import { Button } from '../../../components/Button';
+import { GradientLine } from '../../../components/GradientLine';
 import { useAppDispatch, useAppSelector } from '../../../store/hooks';
 import { loginUser, clearError } from '../../../store/authSlice';
 import { Spacing, BorderRadius, Typography } from '../../../theme';
@@ -72,22 +74,11 @@ export default function LoginScreen({ navigation }: Props) {
               overflow: 'hidden',
             }}
           >
-            {/* Top accent line */}
-            <View
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                height: 3,
-                backgroundColor: colors.primary,
-                opacity: 0.6,
-              }}
-            />
+            {/* Top accent line removed as requested */}
 
             {/* Logo + Header */}
             <View style={{ marginBottom: Spacing['2xl'] }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: Spacing.lg }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.lg }}>
                 <View
                   style={{
                     width: 40,
@@ -102,11 +93,8 @@ export default function LoginScreen({ navigation }: Props) {
                 >
                   <Ionicons name="git-network-outline" size={22} color={colors.primary} />
                 </View>
-                <Text style={{ fontWeight: '700', fontSize: Typography.sizes.xl, color: isDark ? '#fff' : colors.primary }}>
-                  Context
-                </Text>
               </View>
-              <Text style={{ fontSize: Typography.sizes['3xl'], fontWeight: '700', color: colors.text, marginBottom: 6 }}>
+              <Text style={{ fontFamily: Typography.families.display, fontSize: Typography.sizes['3xl'], color: colors.text, marginBottom: 6 }}>
                 Authenticate
               </Text>
               <Text style={{ fontSize: Typography.sizes.base, fontWeight: '500', color: colors.textSecondary }}>
@@ -118,6 +106,7 @@ export default function LoginScreen({ navigation }: Props) {
             <View style={{ gap: Spacing.lg }}>
               <Input
                 label="Identity"
+                labelStyle={{ fontSize: 10, letterSpacing: 2 }}
                 placeholder="user@context.ai"
                 keyboardType="email-address"
                 autoCapitalize="none"
@@ -127,24 +116,26 @@ export default function LoginScreen({ navigation }: Props) {
                 icon={<Ionicons name="finger-print-outline" size={18} color={colors.primary} />}
               />
 
-              <Input
-                label="Access Key"
-                placeholder="••••••••••••"
-                secureTextEntry
-                value={password}
-                onChangeText={setPassword}
-                error={localErrors.password}
-                icon={<Ionicons name="key-outline" size={18} color={colors.primary} />}
-              />
-
-              <TouchableOpacity
-                onPress={() => navigation.navigate('ForgotPassword')}
-                style={{ alignSelf: 'flex-end', marginTop: -Spacing.sm }}
-              >
-                <Text style={{ color: colors.primary, fontSize: Typography.sizes.sm, fontWeight: '600' }}>
-                  Forgot Access Key?
-                </Text>
-              </TouchableOpacity>
+              <View style={{ gap: 6 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginLeft: 4 }}>
+                  <Text style={{ fontFamily: Typography.families.mono, fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 2, color: colors.primary }}>
+                    Access Key
+                  </Text>
+                  <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')}>
+                    <Text style={{ fontFamily: Typography.families.mono, fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1, color: colors.textSecondary }}>
+                      Lost Key?
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                <Input
+                  placeholder="••••••••••••"
+                  secureTextEntry
+                  value={password}
+                  onChangeText={setPassword}
+                  error={localErrors.password}
+                  icon={<Ionicons name="key-outline" size={18} color={colors.primary} />}
+                />
+              </View>
 
               {error && (
                 <View
@@ -161,31 +152,14 @@ export default function LoginScreen({ navigation }: Props) {
               )}
 
               {/* Submit */}
-              <TouchableOpacity
+              <Button
+                title={isLoading ? 'Authenticating...' : 'Sync Context'}
                 onPress={handleLogin}
-                disabled={isLoading}
-                activeOpacity={0.85}
-                style={{
-                  backgroundColor: colors.primary,
-                  paddingVertical: 16,
-                  borderRadius: BorderRadius.lg,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 8,
-                  marginTop: Spacing.sm,
-                  opacity: isLoading ? 0.7 : 1,
-                }}
-              >
-                {isLoading ? (
-                  <ActivityIndicator size="small" color={isDark ? '#000' : '#fff'} />
-                ) : (
-                  <Ionicons name="sync-outline" size={20} color={isDark ? '#000' : '#fff'} />
-                )}
-                <Text style={{ color: isDark ? '#000' : '#fff', fontWeight: '700', fontSize: Typography.sizes.md }}>
-                  {isLoading ? 'Authenticating...' : 'Sync Context'}
-                </Text>
-              </TouchableOpacity>
+                loading={isLoading}
+                icon={<Ionicons name="sync-outline" size={20} color={isDark ? '#000' : '#fff'} />}
+                style={{ marginTop: Spacing.sm }}
+                fullWidth
+              />
             </View>
 
             {/* Footer */}

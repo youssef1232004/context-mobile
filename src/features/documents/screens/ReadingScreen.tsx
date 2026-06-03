@@ -13,6 +13,7 @@ import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../../context/ThemeContext';
 import { Card } from '../../../components/Card';
 import { Badge } from '../../../components/Badge';
+import { SectionLabel } from '../../../components/SectionLabel';
 import { CognitiveLoadBadge } from '../../../components/CognitiveLoadBadge';
 import { SkeletonLoader } from '../../../components/SkeletonLoader';
 import { Toast } from '../../../components/Toast';
@@ -22,6 +23,7 @@ import { api } from '../../../services/api';
 import { secureStorage } from '../../../services/secureStorage';
 import { Spacing, Typography, BorderRadius } from '../../../theme';
 import { ExcelViewer } from '../components/viewers/ExcelViewer';
+import { getTagColor } from '../../../utils/tagUtils';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 type Props = NativeStackScreenProps<any, 'Reading'>;
@@ -410,7 +412,7 @@ export default function ReadingScreen({ route, navigation }: Props) {
             borderRadius: BorderRadius.full, padding: 3,
           }}>
             {([
-              { key: 'content' as ViewMode, label: 'Extracted', icon: 'reader-outline' as const },
+              { key: 'content' as ViewMode, label: 'WorkSpace', icon: 'reader-outline' as const },
               { key: 'original' as ViewMode, label: isPDF ? 'PDF View' : isImage ? 'Image' : 'Original', icon: isPDF ? 'document-text-outline' as const : isImage ? 'image-outline' as const : 'document-outline' as const },
             ]).map((tab) => {
               const active = viewMode === tab.key;
@@ -530,15 +532,18 @@ export default function ReadingScreen({ route, navigation }: Props) {
 
                     {doc.tags?.length > 0 && (
                       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-                        {doc.tags.map((tag: string) => (
-                          <View key={tag} style={{
-                            paddingHorizontal: 10, paddingVertical: 4, borderRadius: BorderRadius.full,
-                            backgroundColor: isDark ? 'rgba(99,102,241,0.15)' : 'rgba(99,102,241,0.08)',
-                            borderWidth: 1, borderColor: isDark ? 'rgba(99,102,241,0.3)' : 'rgba(99,102,241,0.2)',
-                          }}>
-                            <Text style={{ fontSize: 12, fontWeight: '600', color: colors.primary }}>#{tag}</Text>
-                          </View>
-                        ))}
+                        {doc.tags.map((tag: string) => {
+                          const tColor = getTagColor(tag, isDark);
+                          return (
+                            <View key={tag} style={{
+                              paddingHorizontal: 10, paddingVertical: 4, borderRadius: BorderRadius.full,
+                              backgroundColor: tColor.bg,
+                              borderWidth: 1, borderColor: tColor.border,
+                            }}>
+                              <Text style={{ fontSize: 12, fontWeight: '600', color: tColor.text }}>#{tag}</Text>
+                            </View>
+                          );
+                        })}
                       </View>
                     )}
 
@@ -546,7 +551,7 @@ export default function ReadingScreen({ route, navigation }: Props) {
                       <>
                         <View style={{ height: 1, backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : colors.border }} />
                         <View style={{ gap: 4 }}>
-                          <Text style={{ fontSize: 11, fontWeight: '700', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1 }}>AI Summary</Text>
+                          <SectionLabel text="AI Summary" color={colors.textSecondary} />
                           <Text style={{ fontSize: Typography.sizes.sm, color: colors.text, lineHeight: 20 }}>{doc.summary}</Text>
                         </View>
                       </>

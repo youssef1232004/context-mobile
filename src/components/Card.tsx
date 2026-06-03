@@ -2,6 +2,7 @@ import React, { ReactNode } from 'react';
 import { View, Text, ViewStyle } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 import { BorderRadius, Spacing } from '../theme';
+import { GradientLine } from './GradientLine';
 
 interface CardProps {
   children: ReactNode;
@@ -10,6 +11,8 @@ interface CardProps {
   headerIcon?: ReactNode;
   headerVariant?: 'default' | 'destructive';
   style?: ViewStyle;
+  accentGradient?: boolean;
+  shadowElevation?: number;
 }
 
 export const Card: React.FC<CardProps> = ({
@@ -19,6 +22,8 @@ export const Card: React.FC<CardProps> = ({
   headerIcon,
   headerVariant = 'default',
   style,
+  accentGradient = false,
+  shadowElevation = 0,
 }) => {
   const { colors, isDark } = useTheme();
 
@@ -38,6 +43,14 @@ export const Card: React.FC<CardProps> = ({
         : '#dc2626'
       : colors.primary;
 
+  const shadowStyles = shadowElevation > 0 ? {
+    shadowColor: isDark ? '#000' : '#103766',
+    shadowOffset: { width: 0, height: shadowElevation },
+    shadowOpacity: isDark ? 0.5 : 0.15,
+    shadowRadius: shadowElevation * 2,
+    elevation: shadowElevation,
+  } : {};
+
   return (
     <View
       style={[
@@ -47,10 +60,12 @@ export const Card: React.FC<CardProps> = ({
           borderColor: isDark ? 'rgba(255,255,255,0.05)' : colors.border,
           borderRadius: BorderRadius.xl,
           overflow: 'hidden',
+          ...shadowStyles,
         },
         style,
       ]}
     >
+      {accentGradient && <GradientLine />}
       {title && (
         <View
           style={{

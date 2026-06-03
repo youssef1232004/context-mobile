@@ -10,6 +10,12 @@ interface FolderState {
   tree: FolderData[];
   loading: boolean;
   error: string | null;
+  pagination: {
+    currentPage: number;
+    totalPages: number;
+    totalItems: number;
+    limit: number;
+  } | null;
 }
 
 const initialState: FolderState = {
@@ -20,14 +26,15 @@ const initialState: FolderState = {
   tree: [],
   loading: false,
   error: null,
+  pagination: null,
 };
 
 export const fetchFolderContents = createAsyncThunk(
   'folder/fetchContents',
-  async (params: { folderId?: string; search?: string; sortBy?: string; sortOrder?: string } | undefined, { rejectWithValue }) => {
+  async (params: { folderId?: string; search?: string; sortBy?: string; sortOrder?: string; page?: number; limit?: number } | undefined, { rejectWithValue }) => {
     try {
       const response = await folderService.getContents(params);
-      return response.data;
+      return { ...response, _requestPage: params?.page || 1 };
     } catch (e: any) {
       return rejectWithValue(e?.response?.data?.message || 'Failed to fetch folder contents');
     }
@@ -85,10 +92,19 @@ const folderSlice = createSlice({
       })
       .addCase(fetchFolderContents.fulfilled, (state, action) => {
         state.loading = false;
-        state.currentFolder = action.payload.currentFolder;
-        state.breadcrumbs = action.payload.breadcrumbs;
-        state.folders = action.payload.folders;
-        state.documents = action.payload.documents;
+        const { data, pagination, _requestPage } = action.payload as any;
+        state.currentFolder = data.currentFolder;
+        state.breadcrumbs = data.breadcrumbs;
+        state.folders = data.folders;
+        if (_requestPage > 1) {
+          // append unique docs
+          const existingIds = new Set(state.documents.map(d => d._id));
+          const newDocs = data.documents.filter((d: any) => !existingIds.has(d._id));
+          state.documents = [...state.documents, ...newDocs];
+        } else {
+          state.documents = data.documents;
+        }
+        state.pagination = pagination || null;
       })
       .addCase(fetchFolderContents.rejected, (state, action) => {
         state.loading = false;

@@ -10,20 +10,67 @@ interface ActionSheetProps {
   onClose: () => void;
   onShare: () => void;
   onRename: () => void;
-  onReanalyze: () => void;
   onDelete: () => void;
 }
 
-export const DocumentActionSheet: React.FC<ActionSheetProps> = ({ visible, onClose, onShare, onRename, onReanalyze, onDelete }) => {
+export const DocumentActionSheet: React.FC<ActionSheetProps> = ({ visible, onClose, onShare, onRename, onDelete }) => {
   const { colors, isDark } = useTheme();
   if (!visible) return null;
 
   const actions = [
     { icon: 'share-outline' as const, label: 'Share', color: colors.primary, onPress: onShare },
     { icon: 'create-outline' as const, label: 'Rename', color: '#3b82f6', onPress: onRename },
-    { icon: 'refresh-outline' as const, label: 'Reanalyze', color: '#f59e0b', onPress: onReanalyze },
     { icon: 'trash-outline' as const, label: 'Delete', color: '#ef4444', onPress: onDelete },
   ];
+
+  return (
+    <Modal transparent animationType="fade" visible={visible} onRequestClose={onClose}>
+      <TouchableOpacity activeOpacity={1} onPress={onClose} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+        <TouchableOpacity activeOpacity={1} style={{
+          backgroundColor: isDark ? '#1e1e22' : '#fff',
+          borderTopLeftRadius: 20, borderTopRightRadius: 20,
+          paddingTop: Spacing.lg, paddingBottom: 40, paddingHorizontal: Spacing.xl,
+        }}>
+          <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: isDark ? 'rgba(255,255,255,0.15)' : '#ddd', alignSelf: 'center', marginBottom: Spacing.lg }} />
+          {actions.map((a) => (
+            <TouchableOpacity
+              key={a.label}
+              onPress={() => { onClose(); a.onPress(); }}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.md, paddingVertical: 14, borderBottomWidth: a.label === 'Delete' ? 0 : 1, borderBottomColor: isDark ? 'rgba(255,255,255,0.06)' : '#f0f0f0' }}
+            >
+              <Ionicons name={a.icon} size={20} color={a.color} />
+              <Text style={{ fontSize: Typography.sizes.base, fontWeight: '600', color: a.label === 'Delete' ? '#ef4444' : colors.text }}>{a.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Modal>
+  );
+};
+
+/* ── Folder Action Sheet ── */
+interface FolderActionSheetProps {
+  visible: boolean;
+  isAIGenerated?: boolean;
+  folderName?: string;
+  onClose: () => void;
+  onRename: () => void;
+  onDownload?: () => void;
+  onDelete: () => void;
+}
+
+export const FolderActionSheet: React.FC<FolderActionSheetProps> = ({ visible, isAIGenerated, folderName, onClose, onRename, onDownload, onDelete }) => {
+  const { colors, isDark } = useTheme();
+  if (!visible) return null;
+
+  const actions = [];
+  if (!isAIGenerated && folderName?.toLowerCase() !== 'random files') {
+    actions.push({ icon: 'create-outline' as const, label: 'Rename', color: '#3b82f6', onPress: onRename });
+  }
+  if (isAIGenerated && onDownload) {
+    actions.push({ icon: 'download-outline' as const, label: 'Download', color: '#10b981', onPress: onDownload });
+  }
+  actions.push({ icon: 'trash-outline' as const, label: 'Delete', color: '#ef4444', onPress: onDelete });
 
   return (
     <Modal transparent animationType="fade" visible={visible} onRequestClose={onClose}>

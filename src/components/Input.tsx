@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   TextInput,
@@ -6,15 +6,20 @@ import {
   StyleSheet,
   TextInputProps,
   ViewStyle,
+  Animated,
+  TouchableOpacity,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { BorderRadius, Spacing, Typography } from '../theme';
+import { SectionLabel } from './SectionLabel';
 
 interface InputProps extends TextInputProps {
   label?: string;
   error?: string;
   icon?: React.ReactNode;
   containerStyle?: ViewStyle;
+  labelStyle?: any;
 }
 
 export const Input: React.FC<InputProps> = ({
@@ -22,35 +27,43 @@ export const Input: React.FC<InputProps> = ({
   error,
   icon,
   containerStyle,
+  labelStyle,
   style,
   ...rest
 }) => {
   const { colors, isDark } = useTheme();
   const [isFocused, setIsFocused] = useState(false);
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
+  const focusAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(focusAnim, {
+      toValue: isFocused ? 1 : 0,
+      duration: 300,
+      useNativeDriver: false,
+    }).start();
+  }, [isFocused, focusAnim]);
 
   const borderColor = error
     ? colors.error
-    : isFocused
-    ? colors.primary
-    : colors.border;
+    : focusAnim.interpolate({
+        inputRange: [0, 1],
+        outputRange: [colors.border, colors.primary],
+      });
+      
+  const shadowOpacity = focusAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 0.15],
+  });
+
+  const isPasswordField = rest.secureTextEntry !== undefined;
 
   return (
     <View style={[{ gap: 6 }, containerStyle]}>
       {label && (
-        <Text
-          style={{
-            fontSize: Typography.sizes.xs,
-            fontWeight: Typography.weights.bold,
-            color: colors.primary,
-            textTransform: 'uppercase',
-            letterSpacing: 1.5,
-            marginLeft: 4,
-          }}
-        >
-          {label}
-        </Text>
+        <SectionLabel text={label} style={[{ marginLeft: 4 }, labelStyle]} />
       )}
-      <View
+      <Animated.View
         style={{
           flexDirection: 'row',
           alignItems: 'center',
@@ -60,6 +73,11 @@ export const Input: React.FC<InputProps> = ({
           borderRadius: BorderRadius.lg,
           paddingHorizontal: Spacing.base,
           overflow: 'hidden',
+          shadowColor: colors.primary,
+          shadowOffset: { width: 0, height: 0 },
+          shadowOpacity,
+          shadowRadius: 8,
+          // elevation removed to prevent dark shadow bleed through transparent backgrounds on Android
         }}
       >
         {icon && <View style={{ marginRight: Spacing.sm }}>{icon}</View>}
@@ -77,8 +95,22 @@ export const Input: React.FC<InputProps> = ({
             style,
           ]}
           {...rest}
+          secureTextEntry={isPasswordField ? !isPasswordVisible : undefined}
         />
-      </View>
+        {isPasswordField && (
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => setIsPasswordVisible(!isPasswordVisible)}
+            style={{ padding: Spacing.xs, marginLeft: Spacing.xs }}
+          >
+            <Ionicons
+              name={isPasswordVisible ? 'eye-off-outline' : 'eye-outline'}
+              size={20}
+              color={colors.textSecondary}
+            />
+          </TouchableOpacity>
+        )}
+      </Animated.View>
       {error && (
         <Text
           style={{

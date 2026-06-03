@@ -12,6 +12,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../context/ThemeContext';
 import { Input } from '../../../components/Input';
+import { Button } from '../../../components/Button';
+import { GradientLine } from '../../../components/GradientLine';
 import { authService } from '../api/authService';
 import { Spacing, BorderRadius, Typography } from '../../../theme';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -83,44 +85,55 @@ export default function ForgotPasswordScreen({ navigation }: Props) {
               marginTop: Spacing['4xl'],
             }}
           >
-            <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, backgroundColor: colors.primary, opacity: 0.6 }} />
 
             {/* Header */}
             <View style={{ marginBottom: Spacing['2xl'] }}>
-              <Text style={{ fontSize: Typography.sizes['3xl'], fontWeight: '700', color: colors.text, marginBottom: 6 }}>
-                Recover Identity
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.lg }}>
+                <View
+                  style={{
+                    width: 40,
+                    height: 40,
+                    backgroundColor: isDark ? colors.surface : colors.bg,
+                    borderWidth: 1,
+                    borderColor: isDark ? 'rgba(255,255,255,0.1)' : colors.border,
+                    borderRadius: BorderRadius.md,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Ionicons name="git-network-outline" size={22} color={colors.primary} />
+                </View>
+              </View>
+              <Text style={{ fontFamily: Typography.families.display, fontSize: Typography.sizes['3xl'], color: colors.text, marginBottom: 6 }}>
+                Recovery
               </Text>
               <Text style={{ fontSize: Typography.sizes.base, fontWeight: '500', color: colors.textSecondary }}>
-                Enter your email to receive a recovery code.
+                Enter your identity to receive a new access key.
               </Text>
             </View>
 
             {isSuccess ? (
               <View style={{ alignItems: 'center', gap: Spacing.md, paddingVertical: Spacing.xl }}>
-                <Ionicons name="mail-unread-outline" size={48} color={colors.primary} />
-                <Text style={{ fontSize: Typography.sizes.lg, fontWeight: '700', color: colors.text, textAlign: 'center' }}>
-                  Recovery Protocol Sent
-                </Text>
+                <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: `${colors.primary}1A`, alignItems: 'center', justifyContent: 'center', marginBottom: Spacing.sm }}>
+                  <Ionicons name="mail-unread-outline" size={32} color={colors.primary} />
+                </View>
                 <Text style={{ fontSize: Typography.sizes.sm, color: colors.textSecondary, textAlign: 'center' }}>
-                  Check your inbox for the recovery code. Use it to reset your access key.
+                  Instructions have been transmitted to{'\n'}
+                  <Text style={{ fontWeight: '700', color: colors.text }}>{email}</Text>
                 </Text>
-                <TouchableOpacity
-                  onPress={() => navigation.navigate('ResetPassword', { email })}
-                  style={{
-                    backgroundColor: colors.primary,
-                    paddingVertical: 12,
-                    paddingHorizontal: Spacing.xl,
-                    borderRadius: BorderRadius.lg,
-                    marginTop: Spacing.md,
-                  }}
-                >
-                  <Text style={{ color: isDark ? '#000' : '#fff', fontWeight: '700' }}>Enter Recovery Code</Text>
-                </TouchableOpacity>
+                <Button
+                  title="Return to Authentication"
+                  onPress={() => navigation.navigate('Login')}
+                  style={{ marginTop: Spacing.lg }}
+                  variant="outline"
+                  fullWidth
+                />
               </View>
             ) : (
               <View style={{ gap: Spacing.lg }}>
                 <Input
                   label="Identity"
+                  labelStyle={{ fontSize: 10, letterSpacing: 2 }}
                   placeholder="user@context.ai"
                   keyboardType="email-address"
                   autoCapitalize="none"
@@ -136,28 +149,23 @@ export default function ForgotPasswordScreen({ navigation }: Props) {
                   </View>
                 )}
 
-                <TouchableOpacity
+                <Button
+                  title={isLoading ? 'Transmitting...' : 'Send Request'}
                   onPress={handleForgot}
-                  disabled={isLoading}
-                  style={{
-                    backgroundColor: colors.primary,
-                    paddingVertical: 16,
-                    borderRadius: BorderRadius.lg,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 8,
-                    marginTop: Spacing.sm,
-                    opacity: isLoading ? 0.7 : 1,
-                  }}
-                >
-                  {isLoading ? <ActivityIndicator size="small" color={isDark ? '#000' : '#fff'} /> : <Ionicons name="paper-plane-outline" size={20} color={isDark ? '#000' : '#fff'} />}
-                  <Text style={{ color: isDark ? '#000' : '#fff', fontWeight: '700', fontSize: Typography.sizes.md }}>
-                    {isLoading ? 'Transmitting...' : 'Send Recovery Link'}
-                  </Text>
-                </TouchableOpacity>
+                  loading={isLoading}
+                  icon={!isLoading && <Ionicons name="paper-plane-outline" size={20} color={isDark ? '#000' : '#fff'} />}
+                  style={{ marginTop: Spacing.sm }}
+                  fullWidth
+                />
               </View>
             )}
+
+            <View style={{ marginTop: Spacing['2xl'], paddingTop: Spacing.lg, borderTopWidth: 1, borderTopColor: isDark ? 'rgba(255,255,255,0.05)' : colors.border, alignItems: 'center' }}>
+              <TouchableOpacity onPress={() => navigation.navigate('Login')} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Ionicons name="arrow-back" size={14} color={colors.textSecondary} />
+                <Text style={{ fontSize: Typography.sizes.sm, color: colors.textSecondary }}>Cancel and return</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>

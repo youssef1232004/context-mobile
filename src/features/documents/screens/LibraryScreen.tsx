@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, RefreshControl, TextInput, Share, FlatList, Modal
+  View, Text, ScrollView, TouchableOpacity, RefreshControl, TextInput, Share, FlatList, Modal, ActivityIndicator, BackHandler, Image
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,22 +11,23 @@ import { CognitiveLoadBadge } from '../../../components/CognitiveLoadBadge';
 import { SkeletonLoader } from '../../../components/SkeletonLoader';
 import { BulkActionBar } from '../../../components/BulkActionBar';
 import { AnimatedPressable } from '../../../components/AnimatedPressable';
-import { DocumentActionSheet, RenameDialog, ConfirmDialog } from '../../../components/Dialogs';
+import { DocumentActionSheet, RenameDialog, ConfirmDialog, FolderActionSheet } from '../../../components/Dialogs';
 import { Toast } from '../../../components/Toast';
 import { useToast } from '../../../hooks/useToast';
 import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '../../../store/store';
-import { fetchFolderContents, updateDocumentStatuses } from '../../../store/folderSlice';
-import * as FileSystem from 'expo-file-system';
+import { fetchFolderContents } from '../../../store/folderSlice';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
-import EventSource from 'react-native-sse';
 import { secureStorage } from '../../../services/secureStorage';
 import { deleteDocument, bulkDeleteDocuments, synthesizeDocuments, applySemanticFolders, clearSynthesisResult } from '../../../store/documentSlice';
 import { documentService, type Document } from '../api/documentService';
 import { folderService, type FolderData } from '../../folders/api/folderService';
+import { getTagColor } from '../../../utils/tagUtils';
 import { api } from '../../../services/api';
 import { Spacing, Typography, BorderRadius } from '../../../theme';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useFocusEffect } from '@react-navigation/native';
 
 type Props = NativeStackScreenProps<any, 'Library'>;
 
@@ -44,10 +45,12 @@ export default function LibraryScreen({ navigation }: Props) {
   const { toast, showToast, hideToast } = useToast();
 
   const dispatch = useDispatch<AppDispatch>();
-  const { documents, folders, currentFolder, breadcrumbs, loading } = useSelector((state: RootState) => state.folder);
+  const { user } = useSelector((state: RootState) => state.auth);
+  const { documents, folders, currentFolder, breadcrumbs, loading, pagination } = useSelector((state: RootState) => state.folder);
   const { isActionLoading: actionLoading, synthesisResult } = useSelector((state: RootState) => state.document);
 
   const [refreshing, setRefreshing] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   // ── Filter / Sort State ──
   const [search, setSearch] = useState('');
@@ -56,8 +59,10 @@ export default function LibraryScreen({ navigation }: Props) {
   const [showSortMenu, setShowSortMenu] = useState(false);
 
   // ── Selection State ──
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const isSelecting = selectedIds.length > 0;
+  const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
+  const [selectedFolderIds, setSelectedFolderIds] = useState<string[]>([]);
+  const isSelecting = selectedDocIds.length > 0 || selectedFolderIds.length > 0;
+  const selectedCount = selectedDocIds.length + selectedFolderIds.length;
 
   // ── Dialog State ──
   const [actionDoc, setActionDoc] = useState<Document | null>(null);
@@ -65,65 +70,75 @@ export default function LibraryScreen({ navigation }: Props) {
   const [deleteDoc, setDeleteDoc] = useState<Document | null>(null);
   const [bulkDeleteVisible, setBulkDeleteVisible] = useState(false);
 
+  // ── Folder Dialog State ──
+  const [actionFolder, setActionFolder] = useState<FolderData | null>(null);
+  const [renameFolder, setRenameFolder] = useState<FolderData | null>(null);
+  const [deleteFolder, setDeleteFolder] = useState<FolderData | null>(null);
+
   // ── Fetch ──
-  const fetchContents = useCallback((folderId?: string) => {
+  const fetchContents = useCallback((folderId?: string, page = 1) => {
+    if (page > 1) setLoadingMore(true);
     dispatch(fetchFolderContents({
       folderId: folderId || undefined,
       search: search.trim() || undefined,
-      sortBy, sortOrder
-    })).finally(() => setRefreshing(false));
+      sortBy, sortOrder,
+      page, limit: 10
+    })).finally(() => {
+      setRefreshing(false);
+      setLoadingMore(false);
+    });
   }, [search, sortBy, sortOrder, dispatch]);
 
-  useEffect(() => { fetchContents(currentFolder?._id); }, [sortBy, sortOrder]);
-  useEffect(() => { const t = setTimeout(() => fetchContents(currentFolder?._id), 400); return () => clearTimeout(t); }, [search]);
+  useEffect(() => { fetchContents(currentFolder?._id, 1); }, [sortBy, sortOrder]);
+  useEffect(() => { const t = setTimeout(() => fetchContents(currentFolder?._id, 1), 400); return () => clearTimeout(t); }, [search]);
 
-  // ── Live Updates (SSE) ──
-  useEffect(() => {
-    let sse: EventSource | null = null;
-    
-    const connectSSE = async () => {
-      const token = await secureStorage.getToken();
-      const url = `${api.defaults.baseURL?.replace(/\/+$/, '')}/documents/status/stream`;
-      
-      sse = new EventSource(url, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      
-      sse.addEventListener('message', (event) => {
-        if (event?.data) {
-          try {
-            const data = JSON.parse(event.data);
-            dispatch(updateDocumentStatuses(data));
-          } catch (e) {}
+  // ── Hardware Back Button Interceptor ──
+  // Only active when LibraryScreen is focused (not when ReadingScreen is on top)
+  useFocusEffect(
+    React.useCallback(() => {
+      const handleBackPress = () => {
+        if (currentFolder) {
+          const parent = breadcrumbs.length > 0 ? breadcrumbs[breadcrumbs.length - 1] : null;
+          navigateToFolder(parent);
+          return true;
         }
-      });
-    };
-    
-    connectSSE();
-    
-    return () => {
-      if (sse) sse.close();
-    };
-  }, []);
+        return false;
+      };
 
-  const onRefresh = () => { setRefreshing(true); fetchContents(currentFolder?._id); };
+      const subscription = BackHandler.addEventListener('hardwareBackPress', handleBackPress);
+      return () => subscription.remove();
+    }, [currentFolder, breadcrumbs])
+  );
+
+  const onRefresh = () => { setRefreshing(true); fetchContents(currentFolder?._id, 1); };
+
+  const loadMore = () => {
+    if (!loading && !loadingMore && pagination && pagination.currentPage < pagination.totalPages) {
+      fetchContents(currentFolder?._id, pagination.currentPage + 1);
+    }
+  };
 
   const navigateToFolder = (folder: FolderData | null) => {
-    setSelectedIds([]);
+    setSelectedDocIds([]);
+    setSelectedFolderIds([]);
     fetchContents(folder?._id || undefined);
   };
 
 
 
   // ── Selection ──
-  // ALL documents are selectable regardless of folder status.
-  // The restriction on Organize AI is enforced in BulkActionBar via the hasOrganizedDocs prop.
-  const toggleSelect = (id: string) => {
-    setSelectedIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+  const toggleSelectDoc = (id: string) => {
+    setSelectedDocIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
   };
 
-  // True if any selected doc is already organized
-  const hasOrganizedDocs = selectedIds.some((id) => documents.find((d) => d._id === id)?.isOrganized);
+  const toggleSelectFolder = (id: string) => {
+    setSelectedFolderIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+  };
+
+  // True if any selected doc is already organized OR any selected folder is AI generated
+  const hasOrganizedDocs = 
+    selectedDocIds.some((id) => documents.find((d) => d._id === id)?.isOrganized) ||
+    selectedFolderIds.some((id) => folders.find((f) => f._id === id)?.isAIGenerated);
 
   // ── Actions ──
   const handleShare = async (doc: Document) => {
@@ -162,66 +177,78 @@ export default function LibraryScreen({ navigation }: Props) {
     } catch { showToast('Delete failed', 'error'); }
   };
 
+  const handleRenameFolder = async (newName: string) => {
+    if (!renameFolder) return;
+    try {
+      await folderService.rename(renameFolder._id, newName);
+      showToast('Folder renamed', 'success');
+      setRenameFolder(null);
+      fetchContents(currentFolder?._id);
+    } catch { showToast('Rename failed', 'error'); }
+  };
+
+  const handleDeleteFolder = async () => {
+    if (!deleteFolder) return;
+    try {
+      await folderService.delete(deleteFolder._id);
+      showToast('Folder deleted', 'success');
+      setDeleteFolder(null);
+      fetchContents(currentFolder?._id);
+    } catch { showToast('Delete failed', 'error'); }
+  };
+
   const handleBulkDelete = async () => {
     try {
-      await dispatch(bulkDeleteDocuments(selectedIds)).unwrap();
-      showToast(`Deleted ${selectedIds.length} documents`, 'success');
-      setSelectedIds([]);
+      if (selectedDocIds.length > 0) {
+        await dispatch(bulkDeleteDocuments(selectedDocIds)).unwrap();
+      }
+      // Mobile currently doesn't have a bulk folder delete Redux action, so we delete them sequentially
+      if (selectedFolderIds.length > 0) {
+        for (const fId of selectedFolderIds) {
+          await folderService.delete(fId);
+        }
+      }
+      showToast(`Deleted ${selectedCount} items`, 'success');
+      setSelectedDocIds([]);
+      setSelectedFolderIds([]);
       setBulkDeleteVisible(false);
+      fetchContents(currentFolder?._id);
     } catch { showToast('Bulk delete failed', 'error'); }
   };
 
   const handleSynthesize = async () => {
     try {
-      await dispatch(synthesizeDocuments(selectedIds)).unwrap();
-      setSelectedIds([]);
+      await dispatch(synthesizeDocuments(selectedDocIds)).unwrap();
+      setSelectedDocIds([]);
+      setSelectedFolderIds([]);
     } catch { showToast('Synthesis failed', 'error'); }
   };
 
   const handleOrganizeAI = async () => {
     try {
-      const selectedDocs = documents
-        .filter(d => selectedIds.includes(d._id))
+      const selectedDocsFiltered = documents
+        .filter(d => selectedDocIds.includes(d._id))
         .map(d => ({ _id: d._id, title: d.title }));
-      const res = await api.post('/ai/organize-folder', { documents: selectedDocs });
+      const res = await api.post('/ai/organize-folder', { documents: selectedDocsFiltered });
       const updates = res.data?.data?.updates || [];
-      navigation.navigate('FolderProposal', { initialProposals: updates, originalDocs: selectedDocs });
-      setSelectedIds([]);
+      navigation.navigate('FolderProposal', { initialProposals: updates, originalDocs: selectedDocsFiltered });
+      setSelectedDocIds([]);
+      setSelectedFolderIds([]);
     } catch {
       showToast('AI Organize failed', 'error');
     }
   };
 
-  const handleGlobalOrganize = async () => {
-    try {
-      const res = await documentService.proposeGlobalFolderStructure();
-      const updates = res.data?.tree || res.data || [];
-      const flatUpdates: any[] = [];
-      const extractUpdates = (node: any, path: string) => {
-        const currentPath = path ? `${path}/${node.name}` : node.name;
-        if (Array.isArray(node.documentIds)) {
-          node.documentIds.forEach((id: string) => flatUpdates.push({ documentId: id, newPath: currentPath }));
-        }
-        if (Array.isArray(node.subfolders)) {
-          node.subfolders.forEach((sub: any) => extractUpdates(sub, currentPath));
-        }
-      };
-      if (Array.isArray(updates)) {
-        updates.forEach((u) => extractUpdates(u, ''));
-      }
-      navigation.navigate('FolderProposal', { initialProposals: flatUpdates, originalDocs: documents });
-    } catch {
-      showToast('Global Organize failed', 'error');
-    }
-  };
 
-  const handleDownloadFolder = async () => {
-    if (!currentFolder) return;
+  const handleDownloadFolder = async (folder?: any) => {
+    const targetFolder = folder?._id ? folder : currentFolder;
+    if (!targetFolder) return;
     try {
       showToast('Preparing download...', 'info');
       const token = await secureStorage.getToken();
-      const url = `${api.defaults.baseURL?.replace(/\/+$/, '')}/folders/${currentFolder._id}/download`;
-      const fileUri = `${FileSystem.documentDirectory}${currentFolder.name}.zip`;
+      const url = `${api.defaults.baseURL?.replace(/\/+$/, '')}/folders/${targetFolder._id}/download`;
+      const safeName = targetFolder.name.replace(/[^a-zA-Z0-9-_\.]/g, '_');
+      const fileUri = `${FileSystem.documentDirectory}${safeName}.zip`;
       
       const downloadRes = await FileSystem.downloadAsync(url, fileUri, {
         headers: { Authorization: `Bearer ${token}` }
@@ -234,22 +261,11 @@ export default function LibraryScreen({ navigation }: Props) {
           showToast('Saved to device', 'success');
         }
       } else {
-        showToast('Download failed', 'error');
+        showToast(`Download failed (${downloadRes.status})`, 'error');
       }
-    } catch {
+    } catch (e: any) {
+      console.error('Download failed:', e);
       showToast('Download failed', 'error');
-    }
-  };
-
-  const handleReanalyze = async () => {
-    if (!actionDoc) return;
-    try {
-      await documentService.reanalyze(actionDoc._id);
-      showToast('Reanalysis started', 'success');
-      fetchContents(currentFolder?._id);
-    } catch { showToast('Reanalysis failed', 'error'); }
-    finally {
-      setActionDoc(null);
     }
   };
 
@@ -272,12 +288,42 @@ export default function LibraryScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
+      <FolderActionSheet
+        visible={!!actionFolder}
+        isAIGenerated={actionFolder?.isAIGenerated}
+        folderName={actionFolder?.name}
+        onClose={() => setActionFolder(null)}
+        onRename={() => { setRenameFolder(actionFolder); setActionFolder(null); }}
+        onDownload={() => { if (actionFolder) { handleDownloadFolder(actionFolder); setActionFolder(null); } }}
+        onDelete={() => { setDeleteFolder(actionFolder); setActionFolder(null); }}
+      />
+
+      <RenameDialog
+        visible={!!renameFolder}
+        currentName={renameFolder?.name || ''}
+        onClose={() => setRenameFolder(null)}
+        onConfirm={handleRenameFolder}
+      />
+
+      <ConfirmDialog
+        visible={!!deleteFolder}
+        title="Delete Folder"
+        message={`Are you sure you want to delete "${deleteFolder?.name}"? All contents will be permanently deleted.`}
+        confirmText="Delete"
+        destructive
+        onClose={() => setDeleteFolder(null)}
+        onConfirm={handleDeleteFolder}
+      />
+
       <Toast {...toast} onHide={hideToast} />
 
       <FlatList
-        data={documents}
+        data={(loading && !refreshing) ? [] : documents}
         keyExtractor={item => item._id}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+        onEndReached={loadMore}
+        onEndReachedThreshold={0.5}
+        ListFooterComponent={loadingMore ? <View style={{ padding: 20 }}><ActivityIndicator size="small" color={colors.primary} /></View> : <View style={{ height: 40 }} />}
         contentContainerStyle={{ padding: Spacing.xl, gap: Spacing.md, paddingBottom: isSelecting ? 100 : Spacing['4xl'] }}
         windowSize={5}
         initialNumToRender={10}
@@ -288,30 +334,23 @@ export default function LibraryScreen({ navigation }: Props) {
             {/* ── Header ── */}
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: Typography.sizes.sm, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1.5 }}>Library</Text>
+            <Text style={{ fontSize: Typography.sizes.sm, fontFamily: Typography.families.mono, fontWeight: '700', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1.5 }}>Library</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginTop: 2 }}>
-              <Text style={{ fontSize: Typography.sizes['2xl'], fontWeight: '800', color: colors.text }}>
-                {currentFolder ? currentFolder.name : 'All Documents'}
+              <Text style={{ fontSize: Typography.sizes['3xl'], fontFamily: Typography.families.display, color: colors.text }}>
+                {currentFolder ? currentFolder.name : 'Smart Library'}
               </Text>
-              {currentFolder && (
-                <TouchableOpacity onPress={handleDownloadFolder} style={{ padding: 4 }}>
-                  <Ionicons name="download-outline" size={20} color={colors.primary} />
-                </TouchableOpacity>
-              )}
             </View>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm }}>
-            {!currentFolder && (
-              <TouchableOpacity onPress={handleGlobalOrganize} style={{ padding: 6, backgroundColor: isDark ? 'rgba(99,102,241,0.15)' : 'rgba(99,102,241,0.08)', borderRadius: 12 }}>
-                <Ionicons name="color-wand-outline" size={18} color={colors.primary} />
-              </TouchableOpacity>
-            )}
-            <Badge label={`${documents.length}`} variant="primary" />
             <TouchableOpacity 
               onPress={() => navigation.navigate('Profile')}
-              style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : colors.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.05)' : colors.border }}
+              style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : colors.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.05)' : colors.border, overflow: 'hidden' }}
             >
-              <Ionicons name="person" size={18} color={colors.primary} />
+              {user?.avatar ? (
+                <Image source={{ uri: user.avatar }} style={{ width: '100%', height: '100%' }} />
+              ) : (
+                <Ionicons name="person" size={24} color={colors.primary} />
+              )}
             </TouchableOpacity>
           </View>
         </View>
@@ -340,10 +379,10 @@ export default function LibraryScreen({ navigation }: Props) {
         {/* ── Search + Sort ── */}
         <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
           <View style={{
-            flex: 1, flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
+            flex: 1, flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, height: 44,
             backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : colors.surface,
             borderRadius: BorderRadius.xl, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.1)' : colors.border,
-            paddingHorizontal: Spacing.md, paddingVertical: 10,
+            paddingHorizontal: Spacing.md,
           }}>
             <Ionicons name="search-outline" size={18} color={colors.textSecondary} />
             <TextInput placeholder="Search…" placeholderTextColor={colors.textSecondary} value={search} onChangeText={setSearch}
@@ -381,7 +420,7 @@ export default function LibraryScreen({ navigation }: Props) {
                 borderBottomColor: isDark ? 'rgba(255,255,255,0.06)' : '#f0f0f0',
                 backgroundColor: sortBy === opt.key ? (isDark ? 'rgba(99,102,241,0.1)' : 'rgba(99,102,241,0.05)') : 'transparent',
               }}>
-                <Text style={{ fontSize: 13, fontWeight: '600', color: sortBy === opt.key ? colors.primary : colors.text }}>{opt.label}</Text>
+                <Text style={{ fontSize: 13, fontFamily: Typography.families.mono, fontWeight: '600', color: sortBy === opt.key ? colors.primary : colors.text }}>{opt.label}</Text>
                 {sortBy === opt.key && <Ionicons name={sortOrder === 'asc' ? 'arrow-up' : 'arrow-down'} size={14} color={colors.primary} />}
               </TouchableOpacity>
             ))}
@@ -391,20 +430,36 @@ export default function LibraryScreen({ navigation }: Props) {
 
 
         {/* ── Loading ── */}
-        {loading && <SkeletonLoader count={5} type="list" />}
+        {loading && !refreshing && <SkeletonLoader count={5} type="list" />}
 
         {/* ── Folders ── */}
-        {!loading && folders.length > 0 && (
+        {(!loading || refreshing) && folders.length > 0 && (
           <View style={{ gap: Spacing.sm }}>
-            <Text style={{ fontSize: 11, fontWeight: '700', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1 }}>Folders</Text>
-            {folders.map((folder) => (
-              <TouchableOpacity key={folder._id} onPress={() => navigateToFolder(folder)} activeOpacity={0.7}
+            <Text style={{ fontSize: 11, fontFamily: Typography.families.mono, fontWeight: '700', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1 }}>Folders</Text>
+            {folders.map((folder) => {
+              const selected = selectedFolderIds.includes(folder._id);
+              return (
+              <AnimatedPressable key={folder._id} 
+                onPress={() => isSelecting ? toggleSelectFolder(folder._id) : navigateToFolder(folder)} 
+                onLongPress={() => toggleSelectFolder(folder._id)}
+                scaleTo={0.97}
                 style={{
                   flexDirection: 'row', alignItems: 'center', gap: Spacing.md, padding: Spacing.md,
                   borderRadius: BorderRadius.xl, borderWidth: 1,
-                  borderColor: isDark ? 'rgba(255,255,255,0.08)' : colors.border,
-                  backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : colors.surface,
+                  borderColor: selected ? colors.primary : (isDark ? 'rgba(255,255,255,0.08)' : colors.border),
+                  backgroundColor: selected ? (isDark ? 'rgba(99,102,241,0.12)' : 'rgba(99,102,241,0.06)') : (isDark ? 'rgba(255,255,255,0.03)' : colors.surface),
                 }}>
+                {/* Selection indicator */}
+                {isSelecting && (
+                  <View style={{
+                    width: 22, height: 22, borderRadius: 11, borderWidth: 2,
+                    borderColor: selected ? colors.primary : colors.border,
+                    backgroundColor: selected ? colors.primary : 'transparent',
+                    alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    {selected && <Ionicons name="checkmark" size={13} color={isDark ? '#000' : '#fff'} />}
+                  </View>
+                )}
                 <View style={{ width: 42, height: 42, borderRadius: 12, backgroundColor: 'rgba(245,158,11,0.12)', alignItems: 'center', justifyContent: 'center' }}>
                   <Ionicons name="folder" size={22} color="#f59e0b" />
                 </View>
@@ -412,23 +467,28 @@ export default function LibraryScreen({ navigation }: Props) {
                   <Text style={{ fontSize: Typography.sizes.base, fontWeight: '700', color: colors.text }}>{folder.name}</Text>
                   <Text style={{ fontSize: 11, fontWeight: '500', color: colors.textSecondary }}>Folder</Text>
                 </View>
-                <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
-              </TouchableOpacity>
-            ))}
+                {!isSelecting && (
+                  <TouchableOpacity onPress={() => setActionFolder(folder)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} style={{ padding: 4 }}>
+                    <Ionicons name="ellipsis-vertical" size={16} color={colors.textSecondary} />
+                  </TouchableOpacity>
+                )}
+              </AnimatedPressable>
+              );
+            })}
           </View>
         )}
 
-            {documents.length > 0 && folders.length > 0 && <Text style={{ fontSize: 11, fontWeight: '700', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1, marginTop: Spacing.sm }}>Files</Text>}
+            {documents.length > 0 && folders.length > 0 && <Text style={{ fontSize: 11, fontFamily: Typography.families.mono, fontWeight: '700', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1, marginTop: Spacing.sm }}>Files</Text>}
           </View>
         }
         renderItem={({ item: doc }) => {
               const ic = getIcon(doc.fileType);
-              const selected = selectedIds.includes(doc._id);
+              const selected = selectedDocIds.includes(doc._id);
               return (
                 <AnimatedPressable
                   scaleTo={0.97}
-                  onPress={() => isSelecting ? toggleSelect(doc._id) : navigation.navigate('Reading', { documentId: doc._id })}
-                  onLongPress={() => toggleSelect(doc._id)}
+                  onPress={() => isSelecting ? toggleSelectDoc(doc._id) : navigation.navigate('Reading', { documentId: doc._id })}
+                  onLongPress={() => toggleSelectDoc(doc._id)}
                   style={{
                     flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, padding: Spacing.md,
                     borderRadius: BorderRadius.xl, borderWidth: 1,
@@ -462,9 +522,12 @@ export default function LibraryScreen({ navigation }: Props) {
                     {/* Tags */}
                     {doc.tags && doc.tags.length > 0 && (
                       <View style={{ flexDirection: 'row', gap: 4, marginTop: 2 }}>
-                        {doc.tags.slice(0, 2).map((tag) => (
-                          <Text key={tag} style={{ fontSize: 9, fontWeight: '700', color: colors.primary, backgroundColor: `${colors.primary}15`, paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4, overflow: 'hidden' }}>#{tag}</Text>
-                        ))}
+                        {doc.tags.slice(0, 2).map((tag) => {
+                          const tColor = getTagColor(tag, isDark);
+                          return (
+                            <Text key={tag} style={{ fontSize: 9, fontWeight: '700', color: tColor.text, backgroundColor: tColor.bg, borderWidth: 1, borderColor: tColor.border, paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4, overflow: 'hidden' }}>#{tag}</Text>
+                          );
+                        })}
                         {doc.tags.length > 2 && <Text style={{ fontSize: 9, fontWeight: '700', color: colors.textSecondary }}>+{doc.tags.length - 2}</Text>}
                       </View>
                     )}
@@ -499,12 +562,12 @@ export default function LibraryScreen({ navigation }: Props) {
 
       {/* ── Bulk Action Bar ── */}
       <BulkActionBar
-        selectedCount={selectedIds.length}
+        selectedCount={selectedCount}
         hasOrganizedDocs={hasOrganizedDocs}
         onOrganizeAI={handleOrganizeAI}
         onSynthesize={handleSynthesize}
         onDelete={() => setBulkDeleteVisible(true)}
-        onClear={() => setSelectedIds([])}
+        onClear={() => { setSelectedDocIds([]); setSelectedFolderIds([]); }}
       />
 
       {/* ── Dialogs ── */}
@@ -513,7 +576,6 @@ export default function LibraryScreen({ navigation }: Props) {
         onClose={() => setActionDoc(null)}
         onShare={() => actionDoc && handleShare(actionDoc)}
         onRename={() => { if (actionDoc) { setRenameDoc(actionDoc); setActionDoc(null); } }}
-        onReanalyze={handleReanalyze}
         onDelete={() => { if (actionDoc) { setDeleteDoc(actionDoc); setActionDoc(null); } }}
       />
       <RenameDialog
@@ -534,7 +596,7 @@ export default function LibraryScreen({ navigation }: Props) {
       <ConfirmDialog
         visible={bulkDeleteVisible}
         title="Delete Selected"
-        message={`Permanently delete ${selectedIds.length} documents?`}
+        message={`Permanently delete ${selectedCount} selected items?`}
         onClose={() => setBulkDeleteVisible(false)}
         onConfirm={handleBulkDelete}
         loading={actionLoading}

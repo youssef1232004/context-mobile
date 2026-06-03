@@ -1,14 +1,17 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import {
-  TouchableOpacity,
+  Pressable,
   Text,
   ActivityIndicator,
   StyleSheet,
   ViewStyle,
   TextStyle,
+  Animated,
 } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 import { BorderRadius } from '../theme';
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 interface ButtonProps {
   title: string;
@@ -34,6 +37,25 @@ export const Button: React.FC<ButtonProps> = ({
   fullWidth = false,
 }) => {
   const { colors, isDark } = useTheme();
+  const scale = useRef(new Animated.Value(1)).current;
+
+  const handlePressIn = () => {
+    Animated.spring(scale, {
+      toValue: 0.98,
+      useNativeDriver: true,
+      speed: 50,
+      bounciness: 10,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(scale, {
+      toValue: 1,
+      useNativeDriver: true,
+      speed: 50,
+      bounciness: 10,
+    }).start();
+  };
 
   const getButtonStyle = (): ViewStyle => {
     const base: ViewStyle = {
@@ -52,6 +74,11 @@ export const Button: React.FC<ButtonProps> = ({
         return {
           ...base,
           backgroundColor: colors.primary,
+          shadowColor: '#103766',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.3,
+          shadowRadius: 14,
+          elevation: 8,
         };
       case 'outline':
         return {
@@ -69,6 +96,11 @@ export const Button: React.FC<ButtonProps> = ({
         return {
           ...base,
           backgroundColor: '#dc2626',
+          shadowColor: '#dc2626',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.3,
+          shadowRadius: 14,
+          elevation: 8,
         };
       default:
         return base;
@@ -96,11 +128,17 @@ export const Button: React.FC<ButtonProps> = ({
   };
 
   return (
-    <TouchableOpacity
+    <AnimatedPressable
       onPress={onPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
       disabled={disabled || loading}
-      activeOpacity={0.8}
-      style={[getButtonStyle(), disabled && { opacity: 0.5 }, style]}
+      style={[
+        getButtonStyle(),
+        disabled && { opacity: 0.5 },
+        { transform: [{ scale }] },
+        style,
+      ]}
     >
       {loading ? (
         <ActivityIndicator
@@ -113,6 +151,6 @@ export const Button: React.FC<ButtonProps> = ({
           <Text style={[getTextStyle(), textStyle]}>{title}</Text>
         </>
       )}
-    </TouchableOpacity>
+    </AnimatedPressable>
   );
 };

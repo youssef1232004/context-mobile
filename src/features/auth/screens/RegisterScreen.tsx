@@ -12,6 +12,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../context/ThemeContext';
 import { Input } from '../../../components/Input';
+import { Card } from '../../../components/Card';
+import { Button } from '../../../components/Button';
+import { SectionLabel } from '../../../components/SectionLabel';
+import { GradientLine } from '../../../components/GradientLine';
 import { useAppDispatch, useAppSelector } from '../../../store/hooks';
 import { registerUser, clearError } from '../../../store/authSlice';
 import { Spacing, BorderRadius, Typography } from '../../../theme';
@@ -25,10 +29,10 @@ type Props = NativeStackScreenProps<any, 'Register'>;
  * user.model.ts → enum: ['General', 'Engineer', 'Analyst', 'Marketer']
  */
 const PERSONAS = [
-  { id: 'General'  as const, label: 'General',      sub: 'Broad Scope',        icon: 'globe-outline'     as const },
-  { id: 'Marketer' as const, label: 'Professional',  sub: 'Business & Specs',   icon: 'briefcase-outline' as const },
-  { id: 'Analyst'  as const, label: 'Student',       sub: 'Learning Focus',     icon: 'school-outline'    as const },
-  { id: 'Engineer' as const, label: 'Developer',     sub: 'Technical & Code',   icon: 'terminal-outline'  as const },
+  { id: 'general'  as const, label: 'General',      sub: 'Broad Scope',        icon: 'globe-outline'     as const },
+  { id: 'professional' as const, label: 'Professional',  sub: 'Business & Specs',   icon: 'briefcase-outline' as const },
+  { id: 'student'  as const, label: 'Student',       sub: 'Learning Focus',     icon: 'school-outline'    as const },
+  { id: 'developer' as const, label: 'Developer',     sub: 'Technical & Code',   icon: 'terminal-outline'  as const },
 ];
 
 export default function RegisterScreen({ navigation }: Props) {
@@ -41,7 +45,7 @@ export default function RegisterScreen({ navigation }: Props) {
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [persona, setPersona] = useState<'General' | 'Marketer' | 'Analyst' | 'Engineer'>('General');
+  const [persona, setPersona] = useState<'general' | 'professional' | 'student' | 'developer'>('general');
   const [localErrors, setLocalErrors] = useState<Record<string, string>>({});
 
   const getPasswordStrength = (pass: string) => {
@@ -108,29 +112,33 @@ export default function RegisterScreen({ navigation }: Props) {
               overflow: 'hidden',
             }}
           >
-            {/* Side accent */}
-            <View style={{ height: 3, backgroundColor: colors.primary, opacity: 0.6 }} />
+            {/* Top accent line removed as requested */}
 
             <View style={{ padding: Spacing.xl }}>
               {/* Header */}
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing['2xl'] }}>
-                <Text style={{ fontSize: Typography.sizes['2xl'], fontWeight: '700', color: colors.text, flex: 1, marginRight: 12 }} numberOfLines={1} adjustsFontSizeToFit>
-                  Initialize System
-                </Text>
-                <View
-                  style={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: 22,
-                    backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : colors.bg,
-                    borderWidth: 1,
-                    borderColor: isDark ? 'rgba(255,255,255,0.1)' : colors.border,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <Ionicons name="hardware-chip-outline" size={22} color={colors.primary} />
+              <View style={{ marginBottom: Spacing['2xl'] }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={{ fontFamily: Typography.families.display, fontSize: Typography.sizes['2xl'], color: colors.text, flex: 1, marginRight: 12 }} numberOfLines={1} adjustsFontSizeToFit>
+                    Initialize System
+                  </Text>
+                  <View
+                    style={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: 22,
+                      backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : colors.bg,
+                      borderWidth: 1,
+                      borderColor: isDark ? 'rgba(255,255,255,0.1)' : colors.border,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Ionicons name="git-network-outline" size={22} color={colors.primary} />
+                  </View>
                 </View>
+                <Text style={{ fontSize: Typography.sizes.sm, fontWeight: '500', color: colors.textSecondary, marginTop: Spacing.xs }}>
+                  Create a new identity to access the network.
+                </Text>
               </View>
 
               {/* Form */}
@@ -140,6 +148,7 @@ export default function RegisterScreen({ navigation }: Props) {
                   <View style={{ flex: 1 }}>
                     <Input
                       label="Full Name"
+                      labelStyle={{ fontSize: 10, letterSpacing: 2 }}
                       placeholder="fullname"
                       value={fullName}
                       onChangeText={setFullName}
@@ -149,6 +158,7 @@ export default function RegisterScreen({ navigation }: Props) {
                   <View style={{ flex: 1 }}>
                     <Input
                       label="Username"
+                      labelStyle={{ fontSize: 10, letterSpacing: 2 }}
                       placeholder="username"
                       autoCapitalize="none"
                       value={username}
@@ -160,6 +170,7 @@ export default function RegisterScreen({ navigation }: Props) {
 
                 <Input
                   label="Email Address"
+                  labelStyle={{ fontSize: 10, letterSpacing: 2 }}
                   placeholder="name@mail.com"
                   keyboardType="email-address"
                   autoCapitalize="none"
@@ -171,6 +182,7 @@ export default function RegisterScreen({ navigation }: Props) {
                 <View>
                   <Input
                     label="Password"
+                    labelStyle={{ fontSize: 10, letterSpacing: 2 }}
                     placeholder="Create a master key"
                     secureTextEntry
                     value={password}
@@ -191,6 +203,34 @@ export default function RegisterScreen({ navigation }: Props) {
                       />
                     ))}
                   </View>
+                  
+                  {/* Criteria Checklist */}
+                  <View style={{ marginTop: 12, gap: 6, paddingHorizontal: 4 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Ionicons
+                        name={password.length >= 8 ? "checkmark-circle" : "radio-button-off"}
+                        size={14}
+                        color={password.length >= 8 ? "#10b981" : colors.textSecondary}
+                      />
+                      <Text style={{ fontSize: 13, color: password.length >= 8 ? "#10b981" : colors.textSecondary }}>At least 8 characters</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Ionicons
+                        name={/[A-Z]/.test(password) ? "checkmark-circle" : "radio-button-off"}
+                        size={14}
+                        color={/[A-Z]/.test(password) ? "#10b981" : colors.textSecondary}
+                      />
+                      <Text style={{ fontSize: 13, color: /[A-Z]/.test(password) ? "#10b981" : colors.textSecondary }}>At least 1 uppercase letter</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Ionicons
+                        name={/[0-9]/.test(password) ? "checkmark-circle" : "radio-button-off"}
+                        size={14}
+                        color={/[0-9]/.test(password) ? "#10b981" : colors.textSecondary}
+                      />
+                      <Text style={{ fontSize: 13, color: /[0-9]/.test(password) ? "#10b981" : colors.textSecondary }}>At least 1 number</Text>
+                    </View>
+                  </View>
                 </View>
 
                 {/* Persona Selection */}
@@ -201,19 +241,7 @@ export default function RegisterScreen({ navigation }: Props) {
                     borderTopColor: isDark ? 'rgba(255,255,255,0.05)' : colors.border,
                   }}
                 >
-                  <Text
-                    style={{
-                      fontSize: Typography.sizes.xs,
-                      fontWeight: '700',
-                      color: colors.primary,
-                      textTransform: 'uppercase',
-                      letterSpacing: 1.5,
-                      marginBottom: Spacing.md,
-                      marginLeft: 4,
-                    }}
-                  >
-                    Select Semantic Core
-                  </Text>
+                  <SectionLabel text="Select Semantic Core" style={{ marginBottom: Spacing.md, marginLeft: 4 }} />
                   <View style={{ gap: Spacing.sm }}>
                     {/* Row 1 */}
                     <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
@@ -332,29 +360,13 @@ export default function RegisterScreen({ navigation }: Props) {
 
                 {/* Footer */}
                 <View style={{ gap: Spacing.md, paddingTop: Spacing.md }}>
-                  <TouchableOpacity
+                  <Button
+                    title={isLoading ? 'Creating...' : 'Create Node'}
                     onPress={handleRegister}
-                    disabled={isLoading}
-                    activeOpacity={0.85}
-                    style={{
-                      backgroundColor: colors.primary,
-                      paddingVertical: 16,
-                      borderRadius: BorderRadius.lg,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 8,
-                      opacity: isLoading ? 0.7 : 1,
-                    }}
-                  >
-                    {isLoading ? (
-                      <ActivityIndicator size="small" color={isDark ? '#000' : '#fff'} />
-                    ) : null}
-                    <Text style={{ color: isDark ? '#000' : '#fff', fontWeight: '700', fontSize: Typography.sizes.md }}>
-                      {isLoading ? 'Creating...' : 'Create Node'}
-                    </Text>
-                    {!isLoading && <Ionicons name="arrow-forward" size={18} color={isDark ? '#000' : '#fff'} />}
-                  </TouchableOpacity>
+                    loading={isLoading}
+                    icon={!isLoading && <Ionicons name="arrow-forward" size={18} color={isDark ? '#000' : '#fff'} />}
+                    fullWidth
+                  />
 
                   <TouchableOpacity onPress={() => navigation.goBack()} style={{ alignItems: 'center', paddingVertical: 8 }}>
                     <Text style={{ fontSize: Typography.sizes.base, fontWeight: '500', color: colors.textSecondary }}>
