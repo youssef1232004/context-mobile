@@ -29,8 +29,10 @@
 
 <br/>
 
-[![Context API](https://img.shields.io/badge/🔗_Paired_With-Context_API-4F46E5?style=flat-square)](https://github.com/Ahmed-ElKashif/Context-api)
-[![Context Web Frontend](https://img.shields.io/badge/🔗_Paired_With-Context_Web-61DAFB?style=flat-square)](https://github.com/youssef1232004/context-mvp-front)
+[![Context Cloud API](https://img.shields.io/badge/🔗_Paired_With-Context_Cloud_API-4F46E5?style=flat-square)](https://github.com/Ahmed-ElKashif/Context-api)
+[![Context Local API (Ollama)](https://img.shields.io/badge/🔗_Paired_With-Context_Local_API_(Ollama)-111827?style=flat-square)](https://github.com/Ahmed-ElKashif/Context-api-ollama)
+[![Context Web Frontend](https://img.shields.io/badge/🔗_Paired_With-Context_Web_Frontend-61DAFB?style=flat-square)](https://github.com/youssef1232004/context-mvp-front)
+[![Context Desktop App](https://img.shields.io/badge/🔗_Paired_With-Context_Desktop_App-2563EB?style=flat-square)](https://github.com/Ahmed-ElKashif/Context-Desktop)
 
 </div>
 
