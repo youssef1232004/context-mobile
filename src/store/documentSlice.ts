@@ -1,5 +1,6 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { documentService, type Document } from '../features/documents/api/documentService';
+import { prettifyService, isPrettifyLimitError, type PrettifyResult, type PrettifyLimitError } from '../services/prettify.service';
 import { fetchFolderContents } from './folderSlice';
 import type { RootState } from './store';
 
@@ -10,6 +11,12 @@ interface DocumentState {
   error: string | null;
   isActionLoading: boolean;
   synthesisResult: string | null;
+  prettifyState: {
+    status: 'initial' | 'loading' | 'error' | 'result';
+    result: PrettifyResult | null;
+    limitError: PrettifyLimitError | null;
+    genericError: string | null;
+  };
 }
 
 const initialState: DocumentState = {
@@ -19,7 +26,25 @@ const initialState: DocumentState = {
   error: null,
   isActionLoading: false,
   synthesisResult: null,
+  prettifyState: {
+    status: 'initial',
+    result: null,
+    limitError: null,
+    genericError: null,
+  },
 };
+
+export const prettifyDocument = createAsyncThunk(
+  'document/prettify',
+  async ({ documentId, force = false }: { documentId: string; force?: boolean }, { rejectWithValue }) => {
+    try {
+      const result = await prettifyService.prettifyDocument(documentId, force);
+      return { documentId, result };
+    } catch (e: any) {
+      return rejectWithValue(e?.response?.data || { message: e.message || 'Something went wrong' });
+    }
+  }
+);
 
 export const uploadFiles = createAsyncThunk(
   'document/uploadFiles',
@@ -126,6 +151,17 @@ const documentSlice = createSlice({
     },
     clearSynthesisResult: (state) => {
       state.synthesisResult = null;
+    },
+    resetPrettifyState: (state) => {
+      state.prettifyState = initialState.prettifyState;
+    },
+    updateDocumentPrettifiedJson: (state, action: PayloadAction<{ documentId: string; result: PrettifyResult }>) => {
+      // Find the document in current folder's state if possible, though we might not need this if we don't store documents in this slice.
+      // Since documents are mainly in folderSlice, we just update the prettify state.
+      state.prettifyState.status = 'result';
+      state.prettifyState.result = action.payload.result;
+      state.prettifyState.limitError = null;
+      state.prettifyState.genericError = null;
     }
   },
   extraReducers: (builder) => {
@@ -179,9 +215,27 @@ const documentSlice = createSlice({
       .addCase(deleteDocument.rejected, (state) => { state.isActionLoading = false; })
       .addCase(bulkDeleteDocuments.pending, (state) => { state.isActionLoading = true; })
       .addCase(bulkDeleteDocuments.fulfilled, (state) => { state.isActionLoading = false; })
-      .addCase(bulkDeleteDocuments.rejected, (state) => { state.isActionLoading = false; });
+      .addCase(bulkDeleteDocuments.rejected, (state) => { state.isActionLoading = false; })
+      .addCase(prettifyDocument.pending, (state) => {
+        state.prettifyState.status = 'loading';
+        state.prettifyState.limitError = null;
+        state.prettifyState.genericError = null;
+      })
+      .addCase(prettifyDocument.fulfilled, (state, action) => {
+        state.prettifyState.status = 'result';
+        state.prettifyState.result = action.payload.result;
+      })
+      .addCase(prettifyDocument.rejected, (state, action) => {
+        state.prettifyState.status = 'error';
+        const payload = action.payload as any;
+        if (isPrettifyLimitError(payload)) {
+          state.prettifyState.limitError = payload;
+        } else {
+          state.prettifyState.genericError = payload?.message || 'Something went wrong. Please try again.';
+        }
+      });
   },
 });
 
-export const { setUploadProgress, clearSynthesisResult } = documentSlice.actions;
+export const { setUploadProgress, clearSynthesisResult, resetPrettifyState, updateDocumentPrettifiedJson } = documentSlice.actions;
 export default documentSlice.reducer;

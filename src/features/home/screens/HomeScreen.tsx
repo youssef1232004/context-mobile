@@ -29,12 +29,12 @@ import { useNavigation } from '@react-navigation/native';
 const CARD_WIDTH = Dimensions.get('window').width * 0.42;
 
 const FILE_ICONS: Record<string, { name: React.ComponentProps<typeof Ionicons>['name']; color: string }> = {
-  PDF:         { name: 'document-text', color: '#ef4444' },
-  Word:        { name: 'document',      color: '#3b82f6' },
-  Excel:       { name: 'grid',          color: '#10b981' },
-  CSV:         { name: 'grid',          color: '#10b981' },
-  Image:       { name: 'image',         color: '#8b5cf6' },
-  TextSnippet: { name: 'reader',        color: '#f59e0b' },
+  PDF: { name: 'document-text', color: '#ef4444' },
+  Word: { name: 'document', color: '#3b82f6' },
+  Excel: { name: 'grid', color: '#10b981' },
+  CSV: { name: 'grid', color: '#10b981' },
+  Image: { name: 'image', color: '#8b5cf6' },
+  TextSnippet: { name: 'reader', color: '#f59e0b' },
 };
 
 export default function HomeScreen() {
@@ -106,7 +106,7 @@ export default function HomeScreen() {
               <Text style={{ color: colors.primary }}>{user?.fullName || 'User'}</Text>
             </Text>
           </View>
-          <TouchableOpacity 
+          <TouchableOpacity
             onPress={() => navigation.navigate('Profile')}
             style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : colors.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.05)' : colors.border, overflow: 'hidden' }}
           >
@@ -160,7 +160,7 @@ export default function HomeScreen() {
             <View style={{ flexDirection: 'row', gap: Spacing.md }}>
               {[
                 { icon: 'document-text-outline' as const, count: totalDocs, label: 'Documents', color: colors.primary },
-                { icon: 'folder-outline' as const,        count: folderCount, label: 'Folders',   color: '#f59e0b' },
+                { icon: 'folder-outline' as const, count: folderCount, label: 'Folders', color: '#f59e0b' },
               ].map((s) => (
                 <Card key={s.label} style={{ flex: 1 }}>
                   <View style={{ alignItems: 'center', gap: 6 }}>

@@ -367,22 +367,19 @@ export default function ProfileScreen({ navigation }: Props) {
             </View>
           </Card>
 
-          <View style={{ gap: Spacing.md }}>
-            {/* Settings Button */}
-            <Button
-              title="System Settings"
-              onPress={() => navigation.navigate('Settings')}
-              variant="outline"
-              fullWidth
-              icon={<Ionicons name="settings-outline" size={20} color={colors.text} />}
-            />
+          <View style={{ marginTop: Spacing.sm }}>
             {/* Logout Button */}
             <Button
-              title="Disconnect from Node"
+              title="Log Out"
               onPress={handleLogout}
-              variant="outline"
+              variant="ghost"
               fullWidth
-              icon={<Ionicons name="log-out-outline" size={20} color={colors.text} />}
+              icon={<Ionicons name="log-out-outline" size={20} color="#ef4444" />}
+              textStyle={{ color: '#ef4444' }}
+              style={{
+                backgroundColor: isDark ? 'rgba(239, 68, 68, 0.1)' : 'rgba(239, 68, 68, 0.05)',
+                paddingVertical: 16,
+              }}
             />
           </View>
         </ScrollView>

@@ -1,4 +1,5 @@
 import { api } from '../../../services/api';
+import type { PrettifyResult } from '../../../services/prettify.service';
 
 export type DocumentType = 'PDF' | 'Word' | 'Image' | 'TextSnippet' | 'Excel';
 export type AIStatus = 'Pending' | 'Processing' | 'Analyzed' | 'Failed';
@@ -22,6 +23,7 @@ export interface Document {
   /** Whether the user has opened this document since it was uploaded (used by SuggestedFocusService scoring) */
   isUnread?: boolean;
   isOrganized?: boolean;
+  prettifiedJson?: PrettifyResult | null;
   createdAt: string;
   updatedAt: string;
 }

@@ -32,12 +32,12 @@ import { useFocusEffect } from '@react-navigation/native';
 type Props = NativeStackScreenProps<any, 'Library'>;
 
 const FILE_ICONS: Record<string, { name: React.ComponentProps<typeof Ionicons>['name']; color: string }> = {
-  PDF:         { name: 'document-text', color: '#ef4444' },
-  Word:        { name: 'document',      color: '#3b82f6' },
-  Excel:       { name: 'grid',          color: '#10b981' },
-  CSV:         { name: 'grid',          color: '#10b981' },
-  Image:       { name: 'image',         color: '#8b5cf6' },
-  TextSnippet: { name: 'reader',        color: '#f59e0b' },
+  PDF: { name: 'document-text', color: '#ef4444' },
+  Word: { name: 'document', color: '#3b82f6' },
+  Excel: { name: 'grid', color: '#10b981' },
+  CSV: { name: 'grid', color: '#10b981' },
+  Image: { name: 'image', color: '#8b5cf6' },
+  TextSnippet: { name: 'reader', color: '#f59e0b' },
 };
 
 // ── Optimized List Item Component ──
@@ -63,8 +63,8 @@ const DocumentItem = React.memo(({
   const ic = FILE_ICONS[doc.fileType] || { name: 'document-outline' as const, color: colors.textSecondary };
   const d = new Date(doc.updatedAt);
   const now = new Date();
-  const dateStr = d.toDateString() === now.toDateString() 
-    ? `Today, ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` 
+  const dateStr = d.toDateString() === now.toDateString()
+    ? `Today, ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
     : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
   return (
@@ -239,14 +239,14 @@ export default function LibraryScreen({ navigation }: Props) {
   };
 
   // True if any selected doc is already organized OR any selected folder is AI generated
-  const hasOrganizedDocs = 
+  const hasOrganizedDocs =
     selectedDocIds.some((id) => documents.find((d) => d._id === id)?.isOrganized) ||
     selectedFolderIds.some((id) => folders.find((f) => f._id === id)?.isAIGenerated);
 
   // ── Actions ──
   const handleShare = async (doc: Document) => {
     if (!doc.cloudinaryUrl) {
-      try { await Share.share({ message: `Check out "${doc.title}" on Context` }); } catch {}
+      try { await Share.share({ message: `Check out "${doc.title}" on Context` }); } catch { }
       return;
     }
 
@@ -352,11 +352,11 @@ export default function LibraryScreen({ navigation }: Props) {
       const url = `${api.defaults.baseURL?.replace(/\/+$/, '')}/folders/${targetFolder._id}/download`;
       const safeName = targetFolder.name.replace(/[^a-zA-Z0-9-_\.]/g, '_');
       const fileUri = `${FileSystem.documentDirectory}${safeName}.zip`;
-      
+
       const downloadRes = await FileSystem.downloadAsync(url, fileUri, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      
+
       if (downloadRes.status === 200) {
         if (await Sharing.isAvailableAsync()) {
           await Sharing.shareAsync(downloadRes.uri);
@@ -441,151 +441,151 @@ export default function LibraryScreen({ navigation }: Props) {
         ListHeaderComponent={
           <View style={{ gap: Spacing.md }}>
             {/* ── Header ── */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: Typography.sizes.sm, fontFamily: Typography.families.mono, fontWeight: '700', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1.5 }}>Library</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginTop: 2 }}>
-              <Text style={{ fontSize: Typography.sizes['3xl'], fontFamily: Typography.families.display, color: colors.text }}>
-                {currentFolder ? currentFolder.name : 'Smart Library'}
-              </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: Typography.sizes.sm, fontFamily: Typography.families.mono, fontWeight: '700', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1.5 }}>Library</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginTop: 2 }}>
+                  <Text style={{ fontSize: Typography.sizes['3xl'], fontFamily: Typography.families.display, color: colors.text }}>
+                    {currentFolder ? currentFolder.name : 'Smart Library'}
+                  </Text>
+                </View>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm }}>
+                <TouchableOpacity
+                  onPress={() => navigation.navigate('Profile')}
+                  style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : colors.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.05)' : colors.border, overflow: 'hidden' }}
+                >
+                  {user?.avatar ? (
+                    <Image source={{ uri: user.avatar }} style={{ width: '100%', height: '100%' }} />
+                  ) : (
+                    <Ionicons name="person" size={24} color={colors.primary} />
+                  )}
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm }}>
-            <TouchableOpacity 
-              onPress={() => navigation.navigate('Profile')}
-              style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : colors.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.05)' : colors.border, overflow: 'hidden' }}
-            >
-              {user?.avatar ? (
-                <Image source={{ uri: user.avatar }} style={{ width: '100%', height: '100%' }} />
-              ) : (
-                <Ionicons name="person" size={24} color={colors.primary} />
-              )}
-            </TouchableOpacity>
-          </View>
-        </View>
 
-        {/* ── Breadcrumbs ── */}
-        {currentFolder && (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <TouchableOpacity onPress={() => navigateToFolder(null)}>
-                <Text style={{ fontSize: 12, fontWeight: '700', color: colors.primary }}>Root</Text>
-              </TouchableOpacity>
-              {breadcrumbs.map((bc) => (
-                <View key={bc._id} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            {/* ── Breadcrumbs ── */}
+            {currentFolder && (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <TouchableOpacity onPress={() => navigateToFolder(null)}>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: colors.primary }}>Root</Text>
+                  </TouchableOpacity>
+                  {breadcrumbs.map((bc) => (
+                    <View key={bc._id} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <Ionicons name="chevron-forward" size={12} color={colors.textSecondary} />
+                      <TouchableOpacity onPress={() => navigateToFolder(bc)}>
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: colors.primary }}>{bc.name}</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ))}
                   <Ionicons name="chevron-forward" size={12} color={colors.textSecondary} />
-                  <TouchableOpacity onPress={() => navigateToFolder(bc)}>
-                    <Text style={{ fontSize: 12, fontWeight: '700', color: colors.primary }}>{bc.name}</Text>
-                  </TouchableOpacity>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: colors.text }}>{currentFolder.name}</Text>
                 </View>
-              ))}
-              <Ionicons name="chevron-forward" size={12} color={colors.textSecondary} />
-              <Text style={{ fontSize: 12, fontWeight: '700', color: colors.text }}>{currentFolder.name}</Text>
-            </View>
-          </ScrollView>
-        )}
-
-        {/* ── Search + Sort ── */}
-        <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
-          <View style={{
-            flex: 1, flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, height: 44,
-            backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : colors.surface,
-            borderRadius: BorderRadius.xl, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.1)' : colors.border,
-            paddingHorizontal: Spacing.md,
-          }}>
-            <Ionicons name="search-outline" size={18} color={colors.textSecondary} />
-            <TextInput placeholder="Search…" placeholderTextColor={colors.textSecondary} value={search} onChangeText={setSearch}
-              style={{ flex: 1, fontSize: Typography.sizes.sm, color: colors.text, fontWeight: '500' }} />
-            {search.length > 0 && (
-              <TouchableOpacity onPress={() => setSearch('')}><Ionicons name="close-circle" size={16} color={colors.textSecondary} /></TouchableOpacity>
+              </ScrollView>
             )}
-          </View>
-          <TouchableOpacity onPress={() => setShowSortMenu(!showSortMenu)} style={{
-            width: 44, height: 44, borderRadius: BorderRadius.xl, borderWidth: 1,
-            borderColor: isDark ? 'rgba(255,255,255,0.1)' : colors.border,
-            backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : colors.surface,
-            alignItems: 'center', justifyContent: 'center',
-          }}>
-            <Ionicons name="swap-vertical-outline" size={18} color={colors.primary} />
-          </TouchableOpacity>
-        </View>
 
-        {/* ── Sort dropdown ── */}
-        {showSortMenu && (
-          <View style={{
-            borderRadius: BorderRadius.lg, borderWidth: 1,
-            borderColor: isDark ? 'rgba(255,255,255,0.1)' : colors.border,
-            backgroundColor: isDark ? '#1e1e22' : '#fff', overflow: 'hidden',
-          }}>
-            {SORT_OPTIONS.map((opt) => (
-              <TouchableOpacity key={opt.key} onPress={() => {
-                if (sortBy === opt.key) setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-                else { setSortBy(opt.key); setSortOrder('desc'); }
-                setShowSortMenu(false);
-              }} style={{
-                flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-                paddingHorizontal: Spacing.md, paddingVertical: 12,
-                borderBottomWidth: opt.key === 'cognitiveLoad' ? 0 : 1,
-                borderBottomColor: isDark ? 'rgba(255,255,255,0.06)' : '#f0f0f0',
-                backgroundColor: sortBy === opt.key ? (isDark ? 'rgba(99,102,241,0.1)' : 'rgba(99,102,241,0.05)') : 'transparent',
+            {/* ── Search + Sort ── */}
+            <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
+              <View style={{
+                flex: 1, flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, height: 44,
+                backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : colors.surface,
+                borderRadius: BorderRadius.xl, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.1)' : colors.border,
+                paddingHorizontal: Spacing.md,
               }}>
-                <Text style={{ fontSize: 13, fontFamily: Typography.families.mono, fontWeight: '600', color: sortBy === opt.key ? colors.primary : colors.text }}>{opt.label}</Text>
-                {sortBy === opt.key && <Ionicons name={sortOrder === 'asc' ? 'arrow-up' : 'arrow-down'} size={14} color={colors.primary} />}
+                <Ionicons name="search-outline" size={18} color={colors.textSecondary} />
+                <TextInput placeholder="Search…" placeholderTextColor={colors.textSecondary} value={search} onChangeText={setSearch}
+                  style={{ flex: 1, fontSize: Typography.sizes.sm, color: colors.text, fontWeight: '500' }} />
+                {search.length > 0 && (
+                  <TouchableOpacity onPress={() => setSearch('')}><Ionicons name="close-circle" size={16} color={colors.textSecondary} /></TouchableOpacity>
+                )}
+              </View>
+              <TouchableOpacity onPress={() => setShowSortMenu(!showSortMenu)} style={{
+                width: 44, height: 44, borderRadius: BorderRadius.xl, borderWidth: 1,
+                borderColor: isDark ? 'rgba(255,255,255,0.1)' : colors.border,
+                backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : colors.surface,
+                alignItems: 'center', justifyContent: 'center',
+              }}>
+                <Ionicons name="swap-vertical-outline" size={18} color={colors.primary} />
               </TouchableOpacity>
-            ))}
-          </View>
-        )}
+            </View>
 
-
-
-        {/* ── Loading ── */}
-        {loading && !refreshing && <SkeletonLoader count={5} type="list" />}
-
-        {/* ── Folders ── */}
-        {(!loading || refreshing) && folders.length > 0 && (
-          <View style={{ gap: Spacing.sm }}>
-            <Text style={{ fontSize: 11, fontFamily: Typography.families.mono, fontWeight: '700', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1 }}>Folders</Text>
-            {folders.map((folder) => {
-              const selected = selectedFolderIds.includes(folder._id);
-              return (
-              <AnimatedPressable key={folder._id} 
-                onPress={() => isSelecting ? toggleSelectFolder(folder._id) : navigateToFolder(folder)} 
-                onLongPress={() => toggleSelectFolder(folder._id)}
-                scaleTo={0.97}
-                style={{
-                  flexDirection: 'row', alignItems: 'center', gap: Spacing.md, padding: Spacing.md,
-                  borderRadius: BorderRadius.xl, borderWidth: 1,
-                  borderColor: selected ? colors.primary : (isDark ? 'rgba(255,255,255,0.08)' : colors.border),
-                  backgroundColor: selected ? (isDark ? 'rgba(99,102,241,0.12)' : 'rgba(99,102,241,0.06)') : (isDark ? 'rgba(255,255,255,0.03)' : colors.surface),
-                }}>
-                {/* Selection indicator */}
-                {isSelecting && (
-                  <View style={{
-                    width: 22, height: 22, borderRadius: 11, borderWidth: 2,
-                    borderColor: selected ? colors.primary : colors.border,
-                    backgroundColor: selected ? colors.primary : 'transparent',
-                    alignItems: 'center', justifyContent: 'center',
+            {/* ── Sort dropdown ── */}
+            {showSortMenu && (
+              <View style={{
+                borderRadius: BorderRadius.lg, borderWidth: 1,
+                borderColor: isDark ? 'rgba(255,255,255,0.1)' : colors.border,
+                backgroundColor: isDark ? '#1e1e22' : '#fff', overflow: 'hidden',
+              }}>
+                {SORT_OPTIONS.map((opt) => (
+                  <TouchableOpacity key={opt.key} onPress={() => {
+                    if (sortBy === opt.key) setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+                    else { setSortBy(opt.key); setSortOrder('desc'); }
+                    setShowSortMenu(false);
+                  }} style={{
+                    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                    paddingHorizontal: Spacing.md, paddingVertical: 12,
+                    borderBottomWidth: opt.key === 'cognitiveLoad' ? 0 : 1,
+                    borderBottomColor: isDark ? 'rgba(255,255,255,0.06)' : '#f0f0f0',
+                    backgroundColor: sortBy === opt.key ? (isDark ? 'rgba(99,102,241,0.1)' : 'rgba(99,102,241,0.05)') : 'transparent',
                   }}>
-                    {selected && <Ionicons name="checkmark" size={13} color={isDark ? '#000' : '#fff'} />}
-                  </View>
-                )}
-                <View style={{ width: 42, height: 42, borderRadius: 12, backgroundColor: 'rgba(245,158,11,0.12)', alignItems: 'center', justifyContent: 'center' }}>
-                  <Ionicons name="folder" size={22} color="#f59e0b" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: Typography.sizes.base, fontWeight: '700', color: colors.text }}>{folder.name}</Text>
-                  <Text style={{ fontSize: 11, fontWeight: '500', color: colors.textSecondary }}>Folder</Text>
-                </View>
-                {!isSelecting && (
-                  <TouchableOpacity onPress={() => setActionFolder(folder)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} style={{ padding: 4 }}>
-                    <Ionicons name="ellipsis-vertical" size={16} color={colors.textSecondary} />
+                    <Text style={{ fontSize: 13, fontFamily: Typography.families.mono, fontWeight: '600', color: sortBy === opt.key ? colors.primary : colors.text }}>{opt.label}</Text>
+                    {sortBy === opt.key && <Ionicons name={sortOrder === 'asc' ? 'arrow-up' : 'arrow-down'} size={14} color={colors.primary} />}
                   </TouchableOpacity>
-                )}
-              </AnimatedPressable>
-              );
-            })}
-          </View>
-        )}
+                ))}
+              </View>
+            )}
+
+
+
+            {/* ── Loading ── */}
+            {loading && !refreshing && <SkeletonLoader count={5} type="list" />}
+
+            {/* ── Folders ── */}
+            {(!loading || refreshing) && folders.length > 0 && (
+              <View style={{ gap: Spacing.sm }}>
+                <Text style={{ fontSize: 11, fontFamily: Typography.families.mono, fontWeight: '700', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1 }}>Folders</Text>
+                {folders.map((folder) => {
+                  const selected = selectedFolderIds.includes(folder._id);
+                  return (
+                    <AnimatedPressable key={folder._id}
+                      onPress={() => isSelecting ? toggleSelectFolder(folder._id) : navigateToFolder(folder)}
+                      onLongPress={() => toggleSelectFolder(folder._id)}
+                      scaleTo={0.97}
+                      style={{
+                        flexDirection: 'row', alignItems: 'center', gap: Spacing.md, padding: Spacing.md,
+                        borderRadius: BorderRadius.xl, borderWidth: 1,
+                        borderColor: selected ? colors.primary : (isDark ? 'rgba(255,255,255,0.08)' : colors.border),
+                        backgroundColor: selected ? (isDark ? 'rgba(99,102,241,0.12)' : 'rgba(99,102,241,0.06)') : (isDark ? 'rgba(255,255,255,0.03)' : colors.surface),
+                      }}>
+                      {/* Selection indicator */}
+                      {isSelecting && (
+                        <View style={{
+                          width: 22, height: 22, borderRadius: 11, borderWidth: 2,
+                          borderColor: selected ? colors.primary : colors.border,
+                          backgroundColor: selected ? colors.primary : 'transparent',
+                          alignItems: 'center', justifyContent: 'center',
+                        }}>
+                          {selected && <Ionicons name="checkmark" size={13} color={isDark ? '#000' : '#fff'} />}
+                        </View>
+                      )}
+                      <View style={{ width: 42, height: 42, borderRadius: 12, backgroundColor: 'rgba(245,158,11,0.12)', alignItems: 'center', justifyContent: 'center' }}>
+                        <Ionicons name="folder" size={22} color="#f59e0b" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: Typography.sizes.base, fontWeight: '700', color: colors.text }}>{folder.name}</Text>
+                        <Text style={{ fontSize: 11, fontWeight: '500', color: colors.textSecondary }}>Folder</Text>
+                      </View>
+                      {!isSelecting && (
+                        <TouchableOpacity onPress={() => setActionFolder(folder)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} style={{ padding: 4 }}>
+                          <Ionicons name="ellipsis-vertical" size={16} color={colors.textSecondary} />
+                        </TouchableOpacity>
+                      )}
+                    </AnimatedPressable>
+                  );
+                })}
+              </View>
+            )}
 
             {documents.length > 0 && folders.length > 0 && <Text style={{ fontSize: 11, fontFamily: Typography.families.mono, fontWeight: '700', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1, marginTop: Spacing.sm }}>Files</Text>}
           </View>

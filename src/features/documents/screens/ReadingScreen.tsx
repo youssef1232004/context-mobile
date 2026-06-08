@@ -27,6 +27,9 @@ import type { RootState } from '../../../store/store';
 import { ExcelViewer } from '../components/viewers/ExcelViewer';
 import { getTagColor } from '../../../utils/tagUtils';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useAppDispatch } from '../../../store/hooks';
+import { resetPrettifyState } from '../../../store/documentSlice';
+import { PrettifyViewer } from '../components/viewers/PrettifyViewer';
 
 type Props = NativeStackScreenProps<any, 'Reading'>;
 
@@ -36,12 +39,13 @@ interface ChatMessage {
   content: string;
 }
 
-type ViewMode = 'content' | 'original';
+type ViewMode = 'content' | 'original' | 'prettify';
 
 export default function ReadingScreen({ route, navigation }: Props) {
   const { colors, isDark } = useTheme();
   const { toast, showToast, hideToast } = useToast();
   const documentId: string = route.params?.documentId;
+  const dispatch = useAppDispatch();
   const [doc, setDoc] = useState<Document | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -76,6 +80,7 @@ export default function ReadingScreen({ route, navigation }: Props) {
     setHistoryLoaded(false);
     setDownloading(false);
     setReanalyzing(false);
+    dispatch(resetPrettifyState());
   }, [documentId]);
 
   useEffect(() => {
@@ -420,7 +425,7 @@ export default function ReadingScreen({ route, navigation }: Props) {
         </View>
 
         {/* ── View Mode Toggle ── */}
-        {!loading && !error && doc && doc.cloudinaryUrl && !isText && (
+        {!loading && !error && doc && (doc.cloudinaryUrl && !isText || ['Word', 'Excel', 'TextSnippet'].includes(doc.fileType)) && (
           <View style={{
             flexDirection: 'row', alignSelf: 'center', marginTop: Spacing.sm,
             backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#f1f1f4',
@@ -428,7 +433,11 @@ export default function ReadingScreen({ route, navigation }: Props) {
           }}>
             {([
               { key: 'content' as ViewMode, label: 'WorkSpace', icon: 'reader-outline' as const },
-              { key: 'original' as ViewMode, label: isPDF ? 'PDF View' : isImage ? 'Image' : 'Original', icon: isPDF ? 'document-text-outline' as const : isImage ? 'image-outline' as const : 'document-outline' as const },
+              ...(doc.cloudinaryUrl && !isText ? [{ key: 'original' as ViewMode, label: isPDF ? 'PDF View' : isImage ? 'Image' : 'Original', icon: isPDF ? 'document-text-outline' as const : isImage ? 'image-outline' as const : 'document-outline' as const }] : []),
+              // Show Prettify tab for supported file types
+              ...(['Word', 'Excel', 'TextSnippet'].includes(doc.fileType) 
+                ? [{ key: 'prettify' as ViewMode, label: 'Prettify ✨', icon: 'sparkles-outline' as const }]
+                : [])
             ]).map((tab) => {
               const active = viewMode === tab.key;
               return (
@@ -448,7 +457,9 @@ export default function ReadingScreen({ route, navigation }: Props) {
         )}
 
         {/* ── Main Content ── */}
-        {viewMode === 'original' && doc?.cloudinaryUrl && !isText ? (
+        {viewMode === 'prettify' && doc ? (
+          <PrettifyViewer document={doc} />
+        ) : viewMode === 'original' && doc?.cloudinaryUrl && !isText ? (
           // ── In-App Viewer ──
           <View style={{ flex: 1 }}>
             {isImage ? (

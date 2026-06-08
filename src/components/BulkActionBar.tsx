@@ -44,20 +44,32 @@ export const BulkActionBar: React.FC<Props> = ({ selectedCount, hasOrganizedDocs
 
   return (
     <View style={{
-      position: 'absolute', bottom: 24, left: 16, right: 16,
+      position: 'absolute', bottom: 24, alignSelf: 'center',
       flexDirection: 'row', alignItems: 'center',
       backgroundColor: barBg,
-      borderRadius: BorderRadius['2xl'], paddingHorizontal: 16, paddingVertical: 12,
+      borderRadius: BorderRadius.full, paddingHorizontal: 12, paddingVertical: 10,
       shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 16, elevation: 12,
+      minWidth: '90%', maxWidth: '95%',
     }}>
       {/* Pinned Left: count badge */}
-      <Text style={{ fontSize: 12, fontWeight: '800', color: textColor, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-        {selectedCount} selected
-      </Text>
-      <View style={{ width: 1, height: 20, backgroundColor: dividerColor, marginHorizontal: 12 }} />
+      <View style={{ 
+        width: 32, height: 32, borderRadius: 16, 
+        backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)',
+        alignItems: 'center', justifyContent: 'center',
+        marginRight: 10,
+      }}>
+        <Text style={{ fontSize: 13, fontWeight: '800', color: textColor }}>
+          {selectedCount}
+        </Text>
+      </View>
 
-      {/* Center Actions (Flex) */}
-      <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+      {/* Center Actions (Scrollable) */}
+      <ScrollView 
+        horizontal 
+        showsHorizontalScrollIndicator={false} 
+        style={{ flex: 1 }}
+        contentContainerStyle={{ alignItems: 'center', gap: 6, paddingRight: 8 }}
+      >
         {shouldShowOrganize && (
           <TouchableOpacity
             onPress={onOrganizeAI}
@@ -68,11 +80,10 @@ export const BulkActionBar: React.FC<Props> = ({ selectedCount, hasOrganizedDocs
               backgroundColor: organizeColors.bg,
               borderRadius: BorderRadius.full,
               borderWidth: 1, borderColor: organizeColors.border,
-              flexShrink: 1,
             }}
           >
             <Ionicons name="sparkles" size={14} color={organizeColors.text} />
-            <Text style={{ fontSize: 11, fontWeight: '700', color: organizeColors.text, flexShrink: 1 }} numberOfLines={1}>Organize</Text>
+            <Text style={{ fontSize: 11, fontWeight: '700', color: organizeColors.text }}>Organize</Text>
           </TouchableOpacity>
         )}
 
@@ -86,36 +97,44 @@ export const BulkActionBar: React.FC<Props> = ({ selectedCount, hasOrganizedDocs
               backgroundColor: synthesizeColors.bg,
               borderRadius: BorderRadius.full,
               borderWidth: 1, borderColor: synthesizeColors.border,
-              flexShrink: 1,
             }}
           >
             <Ionicons name="flask" size={14} color={synthesizeColors.text} />
-            <Text style={{ fontSize: 11, fontWeight: '700', color: synthesizeColors.text, flexShrink: 1 }} numberOfLines={1}>Synthesize</Text>
+            <Text style={{ fontSize: 11, fontWeight: '700', color: synthesizeColors.text }}>Synthesize</Text>
           </TouchableOpacity>
         )}
-      </View>
+      </ScrollView>
 
       {/* Pinned Right: destructive actions */}
-      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-        <View style={{ width: 1, height: 20, backgroundColor: dividerColor, marginHorizontal: 10 }} />
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <View style={{ width: 1, height: 20, backgroundColor: dividerColor, marginHorizontal: 2 }} />
         
-        {/* Delete Pill - Always visible */}
+        {/* Delete Pill */}
         <TouchableOpacity 
           onPress={onDelete} 
           activeOpacity={0.7}
           style={{ 
-            flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-            width: 30, height: 30, marginRight: 8,
+            width: 32, height: 32, 
+            alignItems: 'center', justifyContent: 'center',
             backgroundColor: deleteColors.bg,
             borderRadius: BorderRadius.full,
             borderWidth: 1, borderColor: deleteColors.border,
           }}
         >
-          <Ionicons name="trash" size={14} color={deleteColors.text} />
+          <Ionicons name="trash" size={15} color={deleteColors.text} />
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={onClear} style={{ padding: 4 }}>
-          <Ionicons name="close" size={20} color={isDark ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.6)'} />
+        {/* Close Pill */}
+        <TouchableOpacity 
+          onPress={onClear} 
+          style={{ 
+            width: 32, height: 32, 
+            alignItems: 'center', justifyContent: 'center',
+            backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.06)',
+            borderRadius: BorderRadius.full,
+          }}
+        >
+          <Ionicons name="close" size={16} color={textColor} />
         </TouchableOpacity>
       </View>
     </View>

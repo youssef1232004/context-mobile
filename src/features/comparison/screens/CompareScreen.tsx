@@ -156,6 +156,10 @@ export default function CompareScreen({ route }: { route?: any }) {
   const [loadingDocs, setLoadingDocs] = useState(false);
   const [docsLoaded, setDocsLoaded] = useState(false);
 
+  // Document select modal state
+  const [docsModalOpen, setDocsModalOpen] = useState(false);
+  const [docsSearch, setDocsSearch] = useState('');
+
   // History modal state
   const [historyOpen, setHistoryOpen] = useState(false);
 
@@ -209,6 +213,12 @@ export default function CompareScreen({ route }: { route?: any }) {
     }
   };
 
+  useEffect(() => {
+    if (docsModalOpen && documents.length === 0 && !docsLoaded) {
+      loadDocuments();
+    }
+  }, [docsModalOpen]);
+
   const loadHistory = async () => {
     dispatch(fetchHistory());
   };
@@ -226,6 +236,10 @@ export default function CompareScreen({ route }: { route?: any }) {
       handleCompare();
     }
   }, [selected, documents]);
+
+  const filteredDocuments = documents.filter((doc) => 
+    doc.title?.toLowerCase().includes(docsSearch.toLowerCase())
+  );
 
   const loadHistoryRecordHandler = async (id: string) => {
     setHistoryOpen(false);
@@ -455,60 +469,46 @@ export default function CompareScreen({ route }: { route?: any }) {
       >
         <ScrollView contentContainerStyle={{ padding: Spacing.xl, gap: Spacing.xl, paddingBottom: Spacing['4xl'] }}>
 
-          {!docsLoaded && !result && !comparing && (
+          {!result && !comparing && (
             <>
               <View>
                 <Text style={{ fontSize: Typography.sizes['3xl'], fontWeight: '800', color: colors.text, marginTop: 4 }}>Compare Docs</Text>
-                <Text style={{ fontSize: Typography.sizes.base, color: colors.textSecondary, marginTop: 4 }}>Select 2–3 documents and let AI surface similarities and differences.</Text>
+                <Text style={{ fontSize: Typography.sizes.base, color: colors.textSecondary, marginTop: 4 }}>Select 2 documents and let AI surface similarities and differences.</Text>
               </View>
+
               <Button
-                title="Load My Documents"
-                onPress={loadDocuments}
-                loading={loadingDocs}
-                icon={<Ionicons name="folder-open-outline" size={20} color={isDark ? '#000' : '#fff'} />}
+                title={selected.length > 0 ? "Change Selection" : "Select Documents"}
+                onPress={() => setDocsModalOpen(true)}
+                loading={loadingDocs && !docsModalOpen}
+                icon={<Ionicons name={selected.length > 0 ? "create-outline" : "folder-open-outline"} size={20} color={isDark ? '#000' : '#fff'} />}
+                variant={selected.length > 0 ? 'outline' : 'primary'}
               />
-            </>
-          )}
 
-          {loadingDocs && <SkeletonLoader count={4} type="list" />}
-
-          {docsLoaded && documents.length > 0 && !result && (
-            <Card
-              title={`Select Documents (${selected.length}/2)`}
-              headerIcon={<Ionicons name="checkbox-outline" size={18} color={colors.primary} />}
-            >
-              <View style={{ gap: Spacing.sm }}>
-                {documents.map((doc) => {
-                  const isSelected = selected.includes(doc._id);
-                  return (
-                    <TouchableOpacity
-                      key={doc._id}
-                      onPress={() => toggleSelect(doc._id)}
-                      activeOpacity={0.7}
-                      style={{
+              {selected.length > 0 && (
+                <View style={{ gap: Spacing.sm, marginTop: Spacing.md }}>
+                  <Text style={{ fontSize: Typography.sizes.sm, fontWeight: '700', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1 }}>Selected for Comparison</Text>
+                  {selected.map((docId) => {
+                    const doc = documents.find(d => d._id === docId);
+                    if (!doc) return null;
+                    return (
+                      <View key={docId} style={{
                         flexDirection: 'row', alignItems: 'center', gap: Spacing.md,
                         padding: Spacing.md, borderRadius: BorderRadius.lg, borderWidth: 1,
-                        borderColor: isSelected ? colors.primary : isDark ? 'rgba(255,255,255,0.08)' : colors.border,
-                        backgroundColor: isSelected ? (isDark ? 'rgba(99,102,241,0.12)' : 'rgba(99,102,241,0.06)') : 'transparent',
-                      }}
-                    >
-                      <View style={{
-                        width: 22, height: 22, borderRadius: 11, borderWidth: 2,
-                        borderColor: isSelected ? colors.primary : colors.border,
-                        backgroundColor: isSelected ? colors.primary : 'transparent',
-                        alignItems: 'center', justifyContent: 'center',
+                        borderColor: isDark ? 'rgba(255,255,255,0.08)' : colors.border,
+                        backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : colors.surface,
                       }}>
-                        {isSelected && <Ionicons name="checkmark" size={13} color={isDark ? '#000' : '#fff'} />}
+                        <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: isDark ? 'rgba(99,102,241,0.15)' : '#eef2ff', alignItems: 'center', justifyContent: 'center' }}>
+                          <Ionicons name="document-text" size={20} color={colors.primary} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: Typography.sizes.base, fontWeight: '600', color: colors.text }} numberOfLines={1}>{doc.title}</Text>
+                        </View>
                       </View>
-                      <Ionicons name="document-text-outline" size={18} color={isSelected ? colors.primary : colors.textSecondary} />
-                      <Text style={{ flex: 1, fontSize: Typography.sizes.sm, fontWeight: '600', color: colors.text }} numberOfLines={1}>
-                        {doc.title}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </Card>
+                    );
+                  })}
+                </View>
+              )}
+            </>
           )}
 
           {selected.length >= 2 && !result && !comparing && (
@@ -732,6 +732,131 @@ export default function CompareScreen({ route }: { route?: any }) {
           </View>
         )}
       </KeyboardAvoidingView>
+
+      {/* ── Document Selection Bottom-Sheet Modal ── */}
+      <Modal
+        visible={docsModalOpen}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setDocsModalOpen(false)}
+      >
+        <TouchableOpacity
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}
+          activeOpacity={1}
+          onPress={() => setDocsModalOpen(false)}
+        >
+          <KeyboardAvoidingView 
+            behavior={Platform.OS === 'ios' ? 'padding' : 'padding'} 
+            style={{ width: '100%' }}
+          >
+            <TouchableOpacity activeOpacity={1} style={{ width: '100%' }}>
+              <View style={{
+                maxHeight: '95%',
+                backgroundColor: isDark ? '#0f0f11' : '#fff',
+                borderTopLeftRadius: 24, borderTopRightRadius: 24,
+                padding: Spacing.xl,
+                shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.15, shadowRadius: 16, elevation: 20,
+              }}>
+                {/* Handle */}
+                <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: isDark ? 'rgba(255,255,255,0.15)' : '#e0e0e0', alignSelf: 'center', marginBottom: Spacing.lg }} />
+
+                {/* Modal Header */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Spacing.md }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm }}>
+                    <Ionicons name="checkbox-outline" size={20} color={colors.primary} />
+                    <Text style={{ fontSize: Typography.sizes.xl, fontWeight: '800', color: colors.text }}>Select Documents ({selected.length}/2)</Text>
+                  </View>
+                  <TouchableOpacity onPress={() => setDocsModalOpen(false)} style={{ padding: 4, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#f0f0f0', borderRadius: 12 }}>
+                    <Ionicons name="close" size={18} color={colors.textSecondary} />
+                  </TouchableOpacity>
+                </View>
+
+                {/* ── Search bar ── */}
+                <View style={{
+                  flexDirection: 'row', alignItems: 'center', gap: 8,
+                  backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#f3f4f6',
+                  borderRadius: BorderRadius.lg, borderWidth: 1,
+                  borderColor: isDark ? 'rgba(255,255,255,0.08)' : colors.border,
+                  paddingHorizontal: 12, marginBottom: Spacing.md,
+                }}>
+                  <Ionicons name="search-outline" size={15} color={colors.textSecondary} />
+                  <TextInput
+                    value={docsSearch}
+                    onChangeText={setDocsSearch}
+                    placeholder="Search documents…"
+                    placeholderTextColor={colors.textSecondary}
+                    returnKeyType="search"
+                    style={{
+                      flex: 1, paddingVertical: 9, fontSize: 13,
+                      color: colors.text, fontWeight: '500',
+                    }}
+                  />
+                  {docsSearch.length > 0 && (
+                    <TouchableOpacity onPress={() => setDocsSearch('')}>
+                      <Ionicons name="close-circle" size={16} color={colors.textSecondary} />
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                {/* Documents list */}
+                {loadingDocs ? (
+                  <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: Spacing.lg, marginBottom: Spacing.xl }} />
+                ) : documents.length === 0 ? (
+                  <Text style={{ color: colors.textSecondary, textAlign: 'center', paddingVertical: Spacing['2xl'] }}>No documents found. Please add some first.</Text>
+                ) : filteredDocuments.length === 0 ? (
+                  <Text style={{ color: colors.textSecondary, textAlign: 'center', paddingVertical: Spacing['2xl'] }}>No results match your search.</Text>
+                ) : (
+                  <FlatList
+                    data={filteredDocuments}
+                    keyExtractor={(d) => d._id}
+                    showsVerticalScrollIndicator={true}
+                    keyboardShouldPersistTaps="handled"
+                    style={{ flexShrink: 1 }}
+                    ItemSeparatorComponent={() => <View style={{ height: Spacing.sm }} />}
+                    renderItem={({ item: doc }) => {
+                      const isSelected = selected.includes(doc._id);
+                      return (
+                        <TouchableOpacity
+                          key={doc._id}
+                          onPress={() => toggleSelect(doc._id)}
+                          activeOpacity={0.7}
+                          style={{
+                            flexDirection: 'row', alignItems: 'center', gap: Spacing.md,
+                            padding: Spacing.md, borderRadius: BorderRadius.lg, borderWidth: 1,
+                            borderColor: isSelected ? colors.primary : isDark ? 'rgba(255,255,255,0.08)' : colors.border,
+                            backgroundColor: isSelected ? (isDark ? 'rgba(99,102,241,0.12)' : 'rgba(99,102,241,0.06)') : 'transparent',
+                          }}
+                        >
+                          <View style={{
+                            width: 22, height: 22, borderRadius: 11, borderWidth: 2,
+                            borderColor: isSelected ? colors.primary : colors.border,
+                            backgroundColor: isSelected ? colors.primary : 'transparent',
+                            alignItems: 'center', justifyContent: 'center',
+                          }}>
+                            {isSelected && <Ionicons name="checkmark" size={13} color={isDark ? '#000' : '#fff'} />}
+                          </View>
+                          <Ionicons name="document-text-outline" size={18} color={isSelected ? colors.primary : colors.textSecondary} />
+                          <Text style={{ flex: 1, fontSize: Typography.sizes.sm, fontWeight: '600', color: colors.text }} numberOfLines={1}>
+                            {doc.title}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    }}
+                  />
+                )}
+
+                {/* Confirm Button */}
+                <Button
+                  title="Confirm Selection"
+                  onPress={() => setDocsModalOpen(false)}
+                  disabled={selected.length !== 2}
+                  style={{ marginTop: Spacing.md }}
+                />
+              </View>
+            </TouchableOpacity>
+          </KeyboardAvoidingView>
+        </TouchableOpacity>
+      </Modal>
 
       {/* ── History Bottom-Sheet Modal ── */}
       <Modal
