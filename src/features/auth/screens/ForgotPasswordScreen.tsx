@@ -11,9 +11,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../context/ThemeContext';
-import { Input } from '../../../components/Input';
-import { Button } from '../../../components/Button';
-import { GradientLine } from '../../../components/GradientLine';
+import { Input } from '../../../components/ui/Input';
+import { Button } from '../../../components/ui/Button';
+import { GradientLine } from '../../../components/ui/GradientLine';
 import { authService } from '../api/authService';
 import { Spacing, BorderRadius, Typography } from '../../../theme';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -117,9 +117,9 @@ export default function ForgotPasswordScreen({ navigation }: Props) {
                 <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: `${colors.primary}1A`, alignItems: 'center', justifyContent: 'center', marginBottom: Spacing.sm }}>
                   <Ionicons name="mail-unread-outline" size={32} color={colors.primary} />
                 </View>
-                <Text style={{ fontSize: Typography.sizes.sm, color: colors.textSecondary, textAlign: 'center' }}>
-                  Instructions have been transmitted to{'\n'}
-                  <Text style={{ fontWeight: '700', color: colors.text }}>{email}</Text>
+                <Text style={{ fontSize: Typography.sizes.sm, color: colors.textSecondary, textAlign: 'center', lineHeight: 20 }}>
+                  A link has been sent to your email.{'\n'}
+                  Please open it from a web browser to reset your password, then return here to login.
                 </Text>
                 <Button
                   title="Return to Authentication"

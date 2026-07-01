@@ -1,5 +1,5 @@
 import { DeviceEventEmitter } from 'react-native';
-import type { ToastVariant } from '../components/Toast';
+import type { ToastVariant } from '../components/ui/Toast';
 
 /**
  * Global toast emitter.

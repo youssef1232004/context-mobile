@@ -69,8 +69,8 @@ export const PrettifyDocumentView: React.FC<PrettifyDocumentViewProps> = ({
           )}
 
           <TouchableOpacity onPress={onShare} style={styles.shareButton}>
-            <Ionicons name="share-outline" size={14} color="#10b981" />
-            <Text style={{ fontSize: 12, fontWeight: '700', color: '#10b981' }}>Share</Text>
+            <Ionicons name="download-outline" size={14} color="#10b981" />
+            <Text style={{ fontSize: 12, fontWeight: '700', color: '#10b981' }}>Download .docx</Text>
           </TouchableOpacity>
         </View>
       </View>

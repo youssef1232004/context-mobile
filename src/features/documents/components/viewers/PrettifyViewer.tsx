@@ -7,7 +7,7 @@ import * as Clipboard from 'expo-clipboard';
 import { useTheme } from '../../../../context/ThemeContext';
 import { Spacing, BorderRadius } from '../../../../theme';
 import { useAppDispatch } from '../../../../store/hooks';
-import { prettifyDocument, updateDocumentPrettifiedJson } from '../../../../store/documentSlice';
+import { prettifyDocument, updateDocumentPrettifiedJson } from '../../store/documentSlice';
 import type { Document } from '../../api/documentService';
 import { computeCapacity, convertToMarkdown } from '../../../../utils/prettify-helpers';
 import { PrettifyDocumentView } from './PrettifyDocumentView';
@@ -16,6 +16,8 @@ import { useToast } from '../../../../hooks/useToast';
 import { useSelector } from 'react-redux';
 import type { RootState } from '../../../../store/store';
 import Papa from 'papaparse';
+import { Document as DocxDocument, Packer, Paragraph, HeadingLevel } from 'docx';
+import * as XLSX from 'xlsx';
 
 interface PrettifyViewerProps {
   document: Document;
@@ -45,21 +47,41 @@ export const PrettifyViewer: React.FC<PrettifyViewerProps> = ({ document: doc })
     if (!result || result.type !== 'document') return;
     
     try {
-      const text = convertToMarkdown(result);
+      showToast('Generating .docx...', 'info');
       const title = doc.title.replace(/\.[^/.]+$/, '');
-      const fileUri = `${FileSystem.cacheDirectory}${title} - Organized.txt`;
-      await FileSystem.writeAsStringAsync(fileUri, text, { encoding: FileSystem.EncodingType.UTF8 });
+      const fileUri = `${FileSystem.cacheDirectory}${title} - Organized.docx`;
+
+      const children: any[] = [];
+      result.sections.forEach(sec => {
+        children.push(new Paragraph({ text: stripHtml(sec.heading), heading: HeadingLevel.HEADING_2 }));
+        if (sec.content) {
+          children.push(new Paragraph({ text: stripHtml(sec.content) }));
+        }
+        const listData = getListItems(sec);
+        if (listData) {
+          listData.items.forEach(item => {
+            children.push(new Paragraph({ text: stripHtml(item), bullet: { level: 0 } }));
+          });
+        }
+      });
+
+      const docxFile = new DocxDocument({
+        sections: [{ children }]
+      });
+
+      const base64Str = await Packer.toBase64(docxFile);
+      await FileSystem.writeAsStringAsync(fileUri, base64Str, { encoding: FileSystem.EncodingType.Base64 });
       
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(fileUri, {
-          mimeType: 'text/plain',
+          mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
           dialogTitle: `Share "${title}"`,
         });
       } else {
-        await Clipboard.setStringAsync(text);
-        showToast('Text copied to clipboard', 'success');
+        showToast('Saved to device', 'success');
       }
     } catch (e) {
+      console.error(e);
       showToast('Failed to share document', 'error');
     }
   };
@@ -82,25 +104,28 @@ export const PrettifyViewer: React.FC<PrettifyViewerProps> = ({ document: doc })
     if (!result || result.type !== 'spreadsheet') return;
 
     try {
-      // Just taking the first sheet for CSV or combining them. 
-      // Combining sheets in CSV isn't standard, we'll take the first sheet.
-      const sheet = result.sheets[0];
-      const csvData = [sheet.headers, ...sheet.rows];
-      const csvString = Papa.unparse(csvData);
+      showToast('Generating .xlsx...', 'info');
+      const wb = XLSX.utils.book_new();
+      result.sheets.forEach((sheet, idx) => {
+        const ws = XLSX.utils.aoa_to_sheet([sheet.headers, ...sheet.rows]);
+        XLSX.utils.book_append_sheet(wb, ws, sheet.name || `Sheet${idx + 1}`);
+      });
+      const base64Str = XLSX.write(wb, { type: 'base64', bookType: 'xlsx' });
       
       const title = doc.title.replace(/\.[^/.]+$/, '');
-      const fileUri = `${FileSystem.cacheDirectory}${title} - Organized.csv`;
-      await FileSystem.writeAsStringAsync(fileUri, csvString, { encoding: FileSystem.EncodingType.UTF8 });
+      const fileUri = `${FileSystem.cacheDirectory}${title} - Organized.xlsx`;
+      await FileSystem.writeAsStringAsync(fileUri, base64Str, { encoding: FileSystem.EncodingType.Base64 });
       
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(fileUri, {
-          mimeType: 'text/csv',
+          mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
           dialogTitle: `Share "${title}"`,
         });
       } else {
         showToast('Sharing not available', 'error');
       }
     } catch (e) {
+      console.error(e);
       showToast('Failed to share spreadsheet', 'error');
     }
   };

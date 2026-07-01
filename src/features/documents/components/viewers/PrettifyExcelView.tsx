@@ -52,8 +52,8 @@ export const PrettifyExcelView: React.FC<PrettifyExcelViewProps> = ({
             <Ionicons name="refresh" size={14} color={colors.textSecondary} />
           </TouchableOpacity>
           <TouchableOpacity onPress={onShare} style={styles.shareButton}>
-            <Ionicons name="share-outline" size={14} color="#10b981" />
-            <Text style={{ fontSize: 12, fontWeight: '700', color: '#10b981', marginLeft: 4 }}>Share .csv</Text>
+            <Ionicons name="download-outline" size={14} color="#10b981" />
+            <Text style={{ fontSize: 12, fontWeight: '700', color: '#10b981', marginLeft: 4 }}>Download .xlsx</Text>
           </TouchableOpacity>
         </View>
       </View>

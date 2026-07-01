@@ -6,7 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../context/ThemeContext';
-import { SkeletonLoader } from '../../../components/SkeletonLoader';
+import { SkeletonLoader } from '../../../components/ui/SkeletonLoader';
 import { searchService, type SemanticSearchResult } from '../api/searchService';
 import { Spacing, Typography, BorderRadius } from '../../../theme';
 import { useNavigation } from '@react-navigation/native';

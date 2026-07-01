@@ -9,12 +9,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../../context/ThemeContext';
-import { Button } from '../../../components/Button';
-import { Toast } from '../../../components/Toast';
+import { Button } from '../../../components/ui/Button';
+import { Toast } from '../../../components/ui/Toast';
 import { useToast } from '../../../hooks/useToast';
 import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '../../../store/store';
-import { applySemanticFolders } from '../../../store/documentSlice';
+import { applySemanticFolders } from '../../documents/store/documentSlice';
 import { documentService } from '../../documents/api/documentService';
 import { Spacing, Typography, BorderRadius } from '../../../theme';
 

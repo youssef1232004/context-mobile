@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import type { ToastVariant } from '../components/Toast';
+import type { ToastVariant } from '../components/ui/Toast';
 
 interface ToastState {
   visible: boolean;
