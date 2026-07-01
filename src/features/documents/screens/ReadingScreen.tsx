@@ -1,82 +1,73 @@
 import React, { useEffect, useState, useRef } from 'react';
-import {
-  View, Text, ScrollView, TouchableOpacity, TextInput, Image, Share,
-  KeyboardAvoidingView, Platform, Animated, Keyboard, ActivityIndicator,
-} from 'react-native';
+import { View, Text, ScrollView, KeyboardAvoidingView, Platform, Keyboard, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { WebView } from 'react-native-webview';
-import Markdown from 'react-native-markdown-display';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
+import { Share } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import { useSelector } from 'react-redux';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+
 import { useTheme } from '../../../context/ThemeContext';
-import { Card } from '../../../components/Card';
-import { Badge } from '../../../components/Badge';
-import { SectionLabel } from '../../../components/SectionLabel';
-import { CognitiveLoadBadge } from '../../../components/CognitiveLoadBadge';
-import { SkeletonLoader } from '../../../components/SkeletonLoader';
-import { Toast } from '../../../components/Toast';
+import { Card } from '../../../components/ui/Card';
+import { SkeletonLoader } from '../../../components/ui/SkeletonLoader';
+import { Toast } from '../../../components/ui/Toast';
 import { useToast } from '../../../hooks/useToast';
+import { useChatSSE } from '../../../hooks/useChatSSE';
 import { documentService, type Document } from '../api/documentService';
 import { api } from '../../../services/api';
-import { secureStorage } from '../../../services/secureStorage';
 import { Spacing, Typography, BorderRadius } from '../../../theme';
-import { useSelector } from 'react-redux';
 import type { RootState } from '../../../store/store';
-import { ExcelViewer } from '../components/viewers/ExcelViewer';
-import { getTagColor } from '../../../utils/tagUtils';
-import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useAppDispatch } from '../../../store/hooks';
+import { resetPrettifyState } from '../store/documentSlice';
+import { PrettifyViewer } from '../components/viewers/PrettifyViewer';
+
+// Components
+import { DocumentNavbar } from '../components/readers/DocumentNavbar';
+import { ViewModeToggle, type ViewMode } from '../components/readers/ViewModeToggle';
+import { OriginalViewer } from '../components/readers/OriginalViewer';
+import { MetaCard } from '../components/readers/MetaCard';
+import { AiChatPanel } from '../../../components/ui/AiChatPanel';
 
 type Props = NativeStackScreenProps<any, 'Reading'>;
 
 interface ChatMessage {
-  // Backend returns role 'ai' for assistant messages — we normalise to 'assistant' on read
   role: 'user' | 'assistant' | 'ai';
   content: string;
 }
-
-type ViewMode = 'content' | 'original';
 
 export default function ReadingScreen({ route, navigation }: Props) {
   const { colors, isDark } = useTheme();
   const { toast, showToast, hideToast } = useToast();
   const documentId: string = route.params?.documentId;
+  const dispatch = useAppDispatch();
   const [doc, setDoc] = useState<Document | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // ── View mode ──
   const [viewMode, setViewMode] = useState<ViewMode>('content');
-
-  // ── Download ──
   const [downloading, setDownloading] = useState(false);
 
   // ── AI Chat ──
   const [chatOpen, setChatOpen] = useState(false);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [chatInput, setChatInput] = useState('');
-  const [chatLoading, setChatLoading] = useState(false);
+  const { messages, loading: chatLoading, sendMessage, setInitialMessages } = useChatSSE(`/documents/${documentId}/chat`);
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [reanalyzing, setReanalyzing] = useState(false);
-  const chatScrollRef = useRef<ScrollView>(null);
-  const panelHeight = useRef(new Animated.Value(0)).current;
 
   // Bug #8: Reset ALL local state when documentId changes to prevent stale content bleed-through.
-  // Without this, opening a Word doc and then an Image would show the Word doc's extracted text.
   useEffect(() => {
     setDoc(null);
     setLoading(true);
     setError(null);
     setViewMode('content');
-    setMessages([]);
-    setChatInput('');
-    setChatLoading(false);
+    setInitialMessages([]);
     setChatOpen(false);
     setHistoryLoaded(false);
     setDownloading(false);
     setReanalyzing(false);
-  }, [documentId]);
+    dispatch(resetPrettifyState());
+  }, [documentId, dispatch, setInitialMessages]);
 
   useEffect(() => {
     if (!documentId) { setError('No document selected.'); setLoading(false); return; }
@@ -84,7 +75,6 @@ export default function ReadingScreen({ route, navigation }: Props) {
       try {
         const res = await documentService.getById(documentId);
         setDoc(res.data);
-        // Default to 'original' for non-text documents that have a cloudinary URL
         if (res.data?.cloudinaryUrl && res.data?.fileType !== 'TextSnippet') {
           setViewMode('original');
         }
@@ -94,7 +84,7 @@ export default function ReadingScreen({ route, navigation }: Props) {
     })();
   }, [documentId]);
 
-  // ── Sync aiStatus from SSE updates (Redux) into local doc state ──
+  // Sync aiStatus from SSE updates
   const reduxDocuments = useSelector((state: RootState) => state.folder.documents);
   useEffect(() => {
     if (!doc || !documentId) return;
@@ -102,44 +92,30 @@ export default function ReadingScreen({ route, navigation }: Props) {
     if (match && match.aiStatus !== doc.aiStatus) {
       setDoc(prev => prev ? { ...prev, aiStatus: match.aiStatus } : prev);
     }
-  }, [reduxDocuments, documentId]);
+  }, [reduxDocuments, documentId, doc]);
 
-  // Load chat history when panel opens
+  // Load chat history
   useEffect(() => {
     if (chatOpen && !historyLoaded && documentId) {
       (async () => {
         try {
           const res = await api.get(`/documents/${documentId}/chat`);
           const history = (res.data?.data || []).map((m: any) => ({
-            // Normalise backend's 'ai' role to 'assistant' for consistent bubble rendering
             role: (m.role === 'ai' ? 'assistant' : m.role) as ChatMessage['role'],
             content: m.content,
           }));
-          setMessages(history);
+          setInitialMessages(history);
         } catch { /* no history yet */ }
         setHistoryLoaded(true);
       })();
     }
-  }, [chatOpen]);
+  }, [chatOpen, historyLoaded, documentId, setInitialMessages]);
 
-  // Animate panel
-  useEffect(() => {
-    Animated.timing(panelHeight, {
-      toValue: chatOpen ? 1 : 0,
-      duration: 250,
-      useNativeDriver: false,
-    }).start();
-  }, [chatOpen]);
-
-  // ── Share ──
   const handleShare = async () => {
     if (!doc?.cloudinaryUrl) {
       try { await Share.share({ message: `Check out "${doc?.title}" on Context` }); } catch {}
       return;
     }
-
-    // The Cloudinary URL now includes the correct file extension (e.g. .docx),
-    // so the OS can recognise the file type directly — no local download needed.
     try {
       await Share.share({
         message: `Check out "${doc.title}" on Context:\n${doc.cloudinaryUrl}`,
@@ -148,16 +124,12 @@ export default function ReadingScreen({ route, navigation }: Props) {
     } catch { /* cancelled */ }
   };
 
-
-  // ── Download (direct to device) ──
   const handleDownload = async () => {
     if (!doc?.cloudinaryUrl) return;
     setDownloading(true);
     try {
-      // Ensure filename has an extension for proper save
       let filename = doc.title.replace(/[^a-zA-Z0-9._-]/g, '_');
       if (!filename.match(/\.[a-zA-Z0-9]+$/)) {
-        // Guess extension from fileType
         const extMap: Record<string, string> = { PDF: '.pdf', Word: '.docx', Image: '.png', TextSnippet: '.txt' };
         filename += extMap[doc.fileType] || '';
       }
@@ -165,7 +137,6 @@ export default function ReadingScreen({ route, navigation }: Props) {
       const downloadResult = await FileSystem.downloadAsync(doc.cloudinaryUrl, fileUri);
       if (downloadResult.status !== 200) { showToast('Download failed', 'error'); return; }
 
-      // Use native share sheet for all file types (Save to Files / Gallery / Share)
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(downloadResult.uri, {
           mimeType: downloadResult.headers?.['content-type'] || 'application/octet-stream',
@@ -181,7 +152,6 @@ export default function ReadingScreen({ route, navigation }: Props) {
     }
   };
 
-  // ── Chat ──
   const handleReanalyze = async () => {
     if (!doc) return;
     setReanalyzing(true);
@@ -189,7 +159,6 @@ export default function ReadingScreen({ route, navigation }: Props) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       await documentService.reanalyze(doc._id);
       showToast('Re-analysis started', 'success');
-      // Refresh the document to show 'Processing' status
       const res = await documentService.getById(doc._id);
       setDoc(res.data || res);
     } catch {
@@ -197,29 +166,6 @@ export default function ReadingScreen({ route, navigation }: Props) {
       showToast('Failed to start re-analysis', 'error');
     } finally {
       setReanalyzing(false);
-    }
-  };
-
-  const sendMessage = async () => {
-    const msg = chatInput.trim();
-    if (!msg || chatLoading || !doc) return;
-    Keyboard.dismiss();
-    setChatInput('');
-    setMessages((prev) => [...prev, { role: 'user', content: msg }]);
-    setChatLoading(true);
-    setTimeout(() => chatScrollRef.current?.scrollToEnd({ animated: true }), 100);
-
-    try {
-      const response = await api.post(`/documents/${documentId}/chat`, { message: msg });
-
-      // Backend: { success: true, data: { role: 'ai', content: aiResponse } }
-      const aiContent = response.data?.data?.content || response.data?.content || 'No response received.';
-      setMessages((prev) => [...prev, { role: 'assistant', content: aiContent }]);
-    } catch (e) {
-      setMessages((prev) => [...prev, { role: 'assistant', content: 'Failed to get response. Please try again.' }]);
-    } finally {
-      setChatLoading(false);
-      setTimeout(() => chatScrollRef.current?.scrollToEnd({ animated: true }), 150);
     }
   };
 
@@ -232,72 +178,10 @@ export default function ReadingScreen({ route, navigation }: Props) {
   const isText = doc?.fileType === 'TextSnippet';
   const textContent = doc?.extractedText || doc?.summary;
 
-  // PDF viewer URL
   const pdfViewerUrl = doc?.cloudinaryUrl
     ? `https://docs.google.com/gview?embedded=true&url=${encodeURIComponent(doc.cloudinaryUrl)}`
     : null;
 
-  // Bug #11: Excel HTML renderer using xlsx CDN inside WebView
-  const getExcelHtml = (fileUrl: string) => {
-    const bg = isDark ? '#0f0f11' : '#ffffff';
-    const fg = isDark ? '#e0e0e6' : '#1a1a2e';
-    const headerBg = isDark ? '#1a1a2e' : '#f8fafc';
-    const borderColor = isDark ? '#333333' : '#e2e8f0';
-    const accent = '#6366f1';
-
-    return `<!DOCTYPE html>
-<html><head><meta name="viewport" content="width=device-width, initial-scale=1">
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
-<style>
-  * { margin:0; padding:0; box-sizing:border-box; }
-  body { background:${bg}; color:${fg}; font-family:-apple-system,system-ui,sans-serif; padding:12px; }
-  #loading { text-align:center; padding:60px 20px; color:${accent}; font-weight:700; }
-  #error { text-align:center; padding:40px; color:#ef4444; font-weight:700; }
-  .sheet-name { font-size:12px; font-weight:800; color:${accent}; text-transform:uppercase; letter-spacing:1px; margin-bottom:8px; margin-top:16px; }
-  .sheet-name:first-child { margin-top:0; }
-  .tbl-wrap { overflow-x:auto; border-radius:10px; border:1px solid ${borderColor}; margin-bottom:16px; }
-  table { border-collapse:collapse; width:100%; font-size:12px; }
-  th { background:${headerBg}; font-weight:700; color:${fg}; padding:8px 10px; border:1px solid ${borderColor}; white-space:nowrap; }
-  td { padding:6px 10px; border:1px solid ${borderColor}; color:${fg}; white-space:nowrap; }
-  tr:nth-child(even) td { background:${isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)'}; }
-</style></head><body>
-<div id="loading">Parsing spreadsheet…</div>
-<div id="error" style="display:none"></div>
-<div id="content" style="display:none"></div>
-<script>
-(async()=>{
-  try {
-    const res = await fetch("${fileUrl}");
-    const buf = await res.arrayBuffer();
-    const wb = XLSX.read(buf, { type: 'array' });
-    const container = document.getElementById('content');
-    wb.SheetNames.forEach(name => {
-      const ws = wb.Sheets[name];
-      const html = XLSX.utils.sheet_to_html(ws, { id: 'tbl_' + name.replace(/\\s/g,'_'), editable: false });
-      const cleanHtml = DOMPurify.sanitize(html);
-      const label = document.createElement('div');
-      label.className = 'sheet-name';
-      label.textContent = name;
-      const wrap = document.createElement('div');
-      wrap.className = 'tbl-wrap';
-      wrap.innerHTML = cleanHtml;
-      container.appendChild(label);
-      container.appendChild(wrap);
-    });
-    document.getElementById('loading').style.display='none';
-    container.style.display='block';
-  } catch(e) {
-    document.getElementById('loading').style.display='none';
-    const err = document.getElementById('error');
-    err.style.display='block';
-    err.textContent = 'Failed to parse spreadsheet: ' + e.message;
-  }
-})();
-</script></body></html>`;
-  };
-
-  // Mammoth WebView HTML for rendering .docx in-app
   const getMammothHtml = (fileUrl: string) => {
     const bg = isDark ? '#0f0f11' : '#ffffff';
     const fg = isDark ? '#e0e0e6' : '#1a1a2e';
@@ -347,172 +231,50 @@ export default function ReadingScreen({ route, navigation }: Props) {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
       <Toast {...toast} onHide={hideToast} />
-      {/* Bug #6: keyboardVerticalOffset stops the keyboard from hiding the input */}
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
-        {/* ── Navbar ── */}
-        <View style={{
-          flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
-          paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm,
-          borderBottomWidth: 1, borderBottomColor: isDark ? 'rgba(255,255,255,0.07)' : colors.border,
-        }}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={{ padding: 4 }}>
-            <Ionicons name="arrow-back" size={22} color={colors.text} />
-          </TouchableOpacity>
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: Typography.sizes.base, fontWeight: '700', color: colors.text }} numberOfLines={1}>
-              {loading ? 'Loading…' : (doc?.title || 'Document')}
-            </Text>
-            {doc?.aiStatus && (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
-                <View style={{
-                  width: 6, height: 6, borderRadius: 3,
-                  backgroundColor: doc.aiStatus === 'Analyzed' ? '#10b981' : doc.aiStatus === 'Failed' ? '#ef4444' : '#f59e0b'
-                }} />
-                <Text style={{ fontSize: 11, color: colors.textSecondary, fontWeight: '500' }}>{doc.aiStatus}</Text>
-                {doc.aiStatus === 'Failed' && (
-                  <TouchableOpacity 
-                    onPress={handleReanalyze} 
-                    disabled={reanalyzing} 
-                    style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginLeft: 4, paddingHorizontal: 6, paddingVertical: 2, backgroundColor: 'rgba(239,68,68,0.1)', borderRadius: 6 }}
-                  >
-                    {reanalyzing
-                      ? <ActivityIndicator size={10} color="#ef4444" />
-                      : <Ionicons name="refresh" size={11} color="#ef4444" />
-                    }
-                    <Text style={{ fontSize: 10, fontWeight: '700', color: '#ef4444' }}>{reanalyzing ? 'Retrying…' : 'Retry'}</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            )}
-          </View>
+        <DocumentNavbar
+          onBack={() => navigation.goBack()}
+          doc={doc}
+          loading={loading}
+          onReanalyze={handleReanalyze}
+          reanalyzing={reanalyzing}
+          onDownload={handleDownload}
+          downloading={downloading}
+          onShare={handleShare}
+          chatOpen={chatOpen}
+          onToggleChat={() => setChatOpen(!chatOpen)}
+        />
 
-          {/* Download button */}
-          {doc?.cloudinaryUrl && (
-            <TouchableOpacity onPress={handleDownload} disabled={downloading} style={{ padding: 4 }}>
-              {downloading
-                ? <ActivityIndicator size="small" color={colors.primary} />
-                : <Ionicons name="download-outline" size={18} color={colors.primary} />
-              }
-            </TouchableOpacity>
-          )}
-
-          {/* Share button */}
-          {doc?.cloudinaryUrl && (
-            <TouchableOpacity onPress={handleShare} style={{ padding: 4 }}>
-              <Ionicons name="share-outline" size={18} color={colors.textSecondary} />
-            </TouchableOpacity>
-          )}
-
-          {/* AI Chat toggle */}
-          <TouchableOpacity
-            onPress={() => setChatOpen(!chatOpen)}
-            style={{
-              padding: 6, borderRadius: 10,
-              backgroundColor: chatOpen ? (isDark ? 'rgba(99,102,241,0.2)' : 'rgba(99,102,241,0.1)') : 'transparent',
-            }}
-          >
-            <Ionicons name="chatbubble-ellipses-outline" size={18} color={chatOpen ? colors.primary : colors.textSecondary} />
-          </TouchableOpacity>
-        </View>
-
-        {/* ── View Mode Toggle ── */}
-        {!loading && !error && doc && doc.cloudinaryUrl && !isText && (
-          <View style={{
-            flexDirection: 'row', alignSelf: 'center', marginTop: Spacing.sm,
-            backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#f1f1f4',
-            borderRadius: BorderRadius.full, padding: 3,
-          }}>
-            {([
-              { key: 'content' as ViewMode, label: 'WorkSpace', icon: 'reader-outline' as const },
-              { key: 'original' as ViewMode, label: isPDF ? 'PDF View' : isImage ? 'Image' : 'Original', icon: isPDF ? 'document-text-outline' as const : isImage ? 'image-outline' as const : 'document-outline' as const },
-            ]).map((tab) => {
-              const active = viewMode === tab.key;
-              return (
-                <TouchableOpacity key={tab.key} onPress={() => setViewMode(tab.key)} style={{
-                  flexDirection: 'row', alignItems: 'center', gap: 5,
-                  paddingHorizontal: 14, paddingVertical: 7, borderRadius: BorderRadius.full,
-                  backgroundColor: active ? (isDark ? colors.primary : '#fff') : 'transparent',
-                  shadowColor: active ? '#000' : 'transparent',
-                  shadowOffset: { width: 0, height: 1 }, shadowOpacity: active ? 0.08 : 0, shadowRadius: 3, elevation: active ? 2 : 0,
-                }}>
-                  <Ionicons name={tab.icon} size={14} color={active ? (isDark ? '#000' : colors.primary) : colors.textSecondary} />
-                  <Text style={{ fontSize: 12, fontWeight: '700', color: active ? (isDark ? '#000' : colors.primary) : colors.textSecondary }}>{tab.label}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+        {!loading && !error && doc && (doc.cloudinaryUrl && !isText || ['Word', 'Excel', 'TextSnippet'].includes(doc.fileType)) && (
+          <ViewModeToggle
+            doc={doc}
+            viewMode={viewMode}
+            onChange={setViewMode}
+            isPDF={isPDF}
+            isImage={isImage}
+            isText={isText}
+          />
         )}
 
-        {/* ── Main Content ── */}
-        {viewMode === 'original' && doc?.cloudinaryUrl && !isText ? (
-          // ── In-App Viewer ──
-          <View style={{ flex: 1 }}>
-            {isImage ? (
-              <ScrollView
-                contentContainerStyle={{ alignItems: 'center', padding: Spacing.lg }}
-                maximumZoomScale={3}
-                minimumZoomScale={1}
-              >
-                <Image
-                  source={{ uri: doc.cloudinaryUrl }}
-                  style={{ width: '100%', aspectRatio: 1, borderRadius: BorderRadius.xl }}
-                  resizeMode="contain"
-                />
-              </ScrollView>
-            ) : isPDF && pdfViewerUrl ? (
-              <WebView
-                source={{ uri: pdfViewerUrl }}
-                style={{ flex: 1, backgroundColor: isDark ? '#0a0a0c' : '#fff' }}
-                startInLoadingState
-                renderLoading={() => (
-                  <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg }}>
-                    <ActivityIndicator size="large" color={colors.primary} />
-                    <Text style={{ marginTop: Spacing.md, fontSize: 13, fontWeight: '600', color: colors.textSecondary }}>Loading PDF…</Text>
-                  </View>
-                )}
-              />
-            ) : isDocx && doc.cloudinaryUrl ? (
-              // .docx — render with mammoth inside WebView
-              <WebView
-                originWhitelist={['*']}
-                source={{ html: getMammothHtml(doc.cloudinaryUrl) }}
-                style={{ flex: 1, backgroundColor: isDark ? '#0f0f11' : '#fff' }}
-                javaScriptEnabled
-                startInLoadingState
-                renderLoading={() => (
-                  <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg }}>
-                    <ActivityIndicator size="large" color={colors.primary} />
-                    <Text style={{ marginTop: Spacing.md, fontSize: 13, fontWeight: '600', color: colors.textSecondary }}>Rendering Word Engine…</Text>
-                  </View>
-                )}
-              />
-            ) : isExcel ? (
-              // ── Excel: native Grid/Charts viewer ──
-              <ExcelViewer extractedText={doc.extractedText || doc.summary || ''} />
-            ) : (
-              // .doc (legacy) or unknown — fallback with download
-              <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: Spacing['2xl'], gap: Spacing.lg }}>
-                <Ionicons name="document-outline" size={56} color={colors.textSecondary} />
-                <Text style={{ fontSize: Typography.sizes.lg, fontWeight: '700', color: colors.text }}>Legacy Document Format</Text>
-                <Text style={{ fontSize: Typography.sizes.sm, color: colors.textSecondary, textAlign: 'center' }}>
-                  Old .doc files can't be rendered in-app. Use the "Extracted" tab to read the text, or download the original file.
-                </Text>
-                <TouchableOpacity onPress={handleDownload} disabled={downloading} style={{
-                  flexDirection: 'row', alignItems: 'center', gap: 8,
-                  paddingHorizontal: 20, paddingVertical: 12, borderRadius: BorderRadius.lg, backgroundColor: colors.primary,
-                }}>
-                  <Ionicons name="download-outline" size={18} color={isDark ? '#000' : '#fff'} />
-                  <Text style={{ fontWeight: '700', color: isDark ? '#000' : '#fff' }}>{downloading ? 'Downloading…' : 'Download File'}</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
+        {viewMode === 'prettify' && doc ? (
+          <PrettifyViewer document={doc} />
+        ) : viewMode === 'original' && doc?.cloudinaryUrl && !isText ? (
+          <OriginalViewer
+            doc={doc}
+            isImage={isImage}
+            isPDF={isPDF}
+            pdfViewerUrl={pdfViewerUrl}
+            isDocx={isDocx}
+            isExcel={isExcel}
+            onDownload={handleDownload}
+            downloading={downloading}
+            getMammothHtml={getMammothHtml}
+          />
         ) : (
-          // ── Extracted Text / Meta view ──
           <ScrollView contentContainerStyle={{ padding: Spacing.xl, gap: Spacing.lg, paddingBottom: chatOpen ? 10 : Spacing['4xl'] }}>
             {loading && <SkeletonLoader count={3} type="card" />}
 
@@ -525,56 +287,8 @@ export default function ReadingScreen({ route, navigation }: Props) {
 
             {!loading && !error && doc && (
               <>
-                {/* Meta Card */}
-                <Card>
-                  <View style={{ gap: Spacing.md }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
-                        <Badge label={doc.fileType?.toUpperCase() || 'FILE'} variant="primary" />
-                        <Badge label={doc.aiStatus || 'Pending'} variant="outline" />
-                      </View>
-                      <CognitiveLoadBadge load={doc.cognitiveLoad} />
-                    </View>
+                <MetaCard doc={doc} />
 
-                    <View style={{ height: 1, backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : colors.border }} />
-
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                      <Text style={{ fontSize: Typography.sizes.sm, color: colors.textSecondary, fontWeight: '500' }}>Uploaded</Text>
-                      <Text style={{ fontSize: Typography.sizes.sm, color: colors.text, fontWeight: '600' }}>
-                        {new Date(doc.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                      </Text>
-                    </View>
-
-                    {doc.tags?.length > 0 && (
-                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-                        {doc.tags.map((tag: string) => {
-                          const tColor = getTagColor(tag, isDark);
-                          return (
-                            <View key={tag} style={{
-                              paddingHorizontal: 10, paddingVertical: 4, borderRadius: BorderRadius.full,
-                              backgroundColor: tColor.bg,
-                              borderWidth: 1, borderColor: tColor.border,
-                            }}>
-                              <Text style={{ fontSize: 12, fontWeight: '600', color: tColor.text }}>#{tag}</Text>
-                            </View>
-                          );
-                        })}
-                      </View>
-                    )}
-
-                    {doc.summary && (
-                      <>
-                        <View style={{ height: 1, backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : colors.border }} />
-                        <View style={{ gap: 4 }}>
-                          <SectionLabel text="AI Summary" color={colors.textSecondary} />
-                          <Text style={{ fontSize: Typography.sizes.sm, color: colors.text, lineHeight: 20 }}>{doc.summary}</Text>
-                        </View>
-                      </>
-                    )}
-                  </View>
-                </Card>
-
-                {/* Content preview — only for Images and TextSnippets */}
                 {(isImage || isText) && (
                   textContent ? (
                     <Card title="Content" headerIcon={<Ionicons name="reader-outline" size={18} color={colors.primary} />}>
@@ -601,110 +315,17 @@ export default function ReadingScreen({ route, navigation }: Props) {
           </ScrollView>
         )}
 
-        {/* ── AI Chat Panel ── */}
-        <Animated.View style={{
-          height: panelHeight.interpolate({ inputRange: [0, 1], outputRange: [0, 340] }),
-          overflow: 'hidden',
-          borderTopWidth: chatOpen ? 1 : 0,
-          borderTopColor: isDark ? 'rgba(255,255,255,0.08)' : colors.border,
-          backgroundColor: isDark ? '#0f0f11' : '#fafafa',
-        }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Ionicons name="sparkles" size={16} color="#f59e0b" />
-              <Text style={{ fontSize: 13, fontWeight: '800', color: colors.text }}>AI Assistant</Text>
-            </View>
-            <TouchableOpacity onPress={() => setChatOpen(false)}>
-              <Ionicons name="chevron-down" size={18} color={colors.textSecondary} />
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView
-            ref={chatScrollRef}
-            style={{ flex: 1, paddingHorizontal: Spacing.lg }}
-            contentContainerStyle={{ gap: Spacing.sm, paddingBottom: Spacing.sm }}
-            onContentSizeChange={() => chatScrollRef.current?.scrollToEnd({ animated: true })}
-          >
-            {messages.length === 0 && !chatLoading && (
-              <Text style={{ fontSize: 12, color: colors.textSecondary, fontStyle: 'italic', textAlign: 'center', paddingVertical: Spacing.lg }}>
-                Ask anything about this document…
-              </Text>
-            )}
-            {messages.map((m, i) => (
-              <View key={i} style={{
-                alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
-                maxWidth: '82%', padding: Spacing.sm, borderRadius: BorderRadius.lg,
-                backgroundColor: m.role === 'user'
-                  ? colors.primary
-                  : (isDark ? 'rgba(255,255,255,0.08)' : '#e8e8ec'),
-              }}>
-                {/* Bug #6: Markdown for AI messages in ReadingScreen */}
-                {m.role === 'user' ? (
-                  <Text style={{ fontSize: 13, lineHeight: 19, fontWeight: '500', color: isDark ? '#000' : '#fff' }}>
-                    {m.content}
-                  </Text>
-                ) : (
-                  <Markdown style={{
-                    body: { color: colors.text, fontSize: 13, lineHeight: 19 },
-                    paragraph: { color: colors.text, fontSize: 13, lineHeight: 19, marginBottom: 2 },
-                    bullet_list: { marginBottom: 2 },
-                    list_item: { color: colors.text, fontSize: 13 },
-                    strong: { fontWeight: '700' as const, color: colors.text },
-                    code_inline: { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#f3f4f6', borderRadius: 4, fontSize: 12, color: colors.primary },
-                  }}>
-                    {m.content}
-                  </Markdown>
-                )}
-              </View>
-            ))}
-            {chatLoading && (
-              <View style={{
-                alignSelf: 'flex-start', flexDirection: 'row', gap: 4,
-                padding: Spacing.sm, borderRadius: BorderRadius.lg,
-                backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#e8e8ec',
-              }}>
-                {[0, 1, 2].map((i) => (
-                  <View key={i} style={{
-                    width: 7, height: 7, borderRadius: 4,
-                    backgroundColor: colors.primary, opacity: 0.6,
-                  }} />
-                ))}
-              </View>
-            )}
-          </ScrollView>
-
-          <View style={{
-            flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
-            paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm,
-            borderTopWidth: 1, borderTopColor: isDark ? 'rgba(255,255,255,0.06)' : '#e8e8ec',
-          }}>
-            <TextInput
-              value={chatInput}
-              onChangeText={setChatInput}
-              placeholder="Ask about this document…"
-              placeholderTextColor={colors.textSecondary}
-              onSubmitEditing={sendMessage}
-              returnKeyType="send"
-              style={{
-                flex: 1, fontSize: 13, color: colors.text, fontWeight: '500',
-                paddingHorizontal: Spacing.md, paddingVertical: 8,
-                borderRadius: BorderRadius.lg, borderWidth: 1,
-                borderColor: isDark ? 'rgba(255,255,255,0.1)' : colors.border,
-                backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#fff',
-              }}
-            />
-            <TouchableOpacity
-              onPress={sendMessage}
-              disabled={!chatInput.trim() || chatLoading}
-              style={{
-                width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center',
-                backgroundColor: chatInput.trim() ? colors.primary : (isDark ? 'rgba(255,255,255,0.06)' : '#e5e7eb'),
-              }}
-            >
-              <Ionicons name="send" size={16} color={chatInput.trim() ? (isDark ? '#000' : '#fff') : colors.textSecondary} />
-            </TouchableOpacity>
-          </View>
-        </Animated.View>
+        <AiChatPanel
+          messages={messages as any}
+          isOpen={chatOpen}
+          onClose={() => setChatOpen(false)}
+          onSendMessage={sendMessage}
+          loading={chatLoading}
+          placeholder="Ask about this document…"
+          title="AI Assistant"
+          subtitle="Chat with Document"
+          suggestedPrompts={['Summarize this document', 'What are the key takeaways?', 'Explain like I am 5']}
+        />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

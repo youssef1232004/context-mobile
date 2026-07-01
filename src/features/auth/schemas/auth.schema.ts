@@ -18,6 +18,7 @@ export interface AuthUser {
   fullName: string;
   username: string;
   email: string;
+  role?: 'user' | 'admin';
   persona: 'general' | 'professional' | 'student' | 'developer';
   avatar?: string;
   createdAt?: string;
@@ -26,8 +27,8 @@ export interface AuthUser {
 
 export interface AuthResponse {
   success: boolean;
-  token: string;
-  user: AuthUser;
+  token?: string;
+  user?: AuthUser;
 }
 
 export interface ProfileUpdateData {

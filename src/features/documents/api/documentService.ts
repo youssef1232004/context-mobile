@@ -1,4 +1,5 @@
 import { api } from '../../../services/api';
+import type { PrettifyResult } from '../../../services/prettify.service';
 
 export type DocumentType = 'PDF' | 'Word' | 'Image' | 'TextSnippet' | 'Excel';
 export type AIStatus = 'Pending' | 'Processing' | 'Analyzed' | 'Failed';
@@ -22,6 +23,7 @@ export interface Document {
   /** Whether the user has opened this document since it was uploaded (used by SuggestedFocusService scoring) */
   isUnread?: boolean;
   isOrganized?: boolean;
+  prettifiedJson?: PrettifyResult | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -119,23 +121,6 @@ export const documentService = {
     return response.data;
   },
 
-  generateFolderStructure: async (payload: { documents: any[]; folderIds?: string[] }) => {
-    const response = await api.post('/ai/organize-folder', payload);
-    return response.data;
-  },
-
-  proposeGlobalFolderStructure: async () => {
-    const response = await api.post('/folders/propose');
-    return response.data;
-  },
-
-
-
-  synthesize: async (documentIds: string[]) => {
-    const response = await api.post('/ai/synthesize', { documentIds });
-    return response.data;
-  },
-
   reanalyze: async (id: string) => {
     const response = await api.post(`/documents/${id}/reanalyze`);
     return response.data;
@@ -146,8 +131,20 @@ export const documentService = {
     return response.data;
   },
 
-  applySemanticFolders: async (updates: { documentId: string, newPath: string }[]) => {
-    const response = await api.put('/ai/apply-folders', { updates });
+  moveDocument: async (id: string, targetFolderId: string | null) => {
+    const response = await api.put(`/documents/${id}`, { folder: targetFolderId });
+    return response.data;
+  },
+
+  copyDocument: async (id: string, targetFolderId: string | null) => {
+    const response = await api.post(`/documents/${id}/copy`, { targetFolderId });
+    return response.data;
+  },
+
+  downloadBulkZip: async (documentIds: string[], folderIds: string[]) => {
+    const response = await api.post('/documents/bulk-download', { documentIds, folderIds }, {
+      responseType: 'blob'
+    });
     return response.data;
   },
 };

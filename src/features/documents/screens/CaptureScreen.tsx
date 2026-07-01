@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, TextInput, Animated, Keyboard,
+  View, Text, ScrollView, TouchableOpacity, TextInput, Animated, Keyboard, DeviceEventEmitter
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,12 +8,13 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../../context/ThemeContext';
-import { Card } from '../../../components/Card';
-import { Button } from '../../../components/Button';
-import { Toast } from '../../../components/Toast';
-import { SectionLabel } from '../../../components/SectionLabel';
+import { Card } from '../../../components/ui/Card';
+import { Button } from '../../../components/ui/Button';
+import { Toast } from '../../../components/ui/Toast';
+import { SectionLabel } from '../../../components/ui/SectionLabel';
 import { useToast } from '../../../hooks/useToast';
 import { documentService } from '../api/documentService';
+import { notificationService } from '../../../services/notificationService';
 import { Spacing, Typography, BorderRadius } from '../../../theme';
 
 const FILE_ACCEPT = [
@@ -217,7 +218,18 @@ export default function CaptureScreen({ route }: Props) {
         } as any);
       });
 
-      await documentService.uploadWithProgress(formData, (pct) => setUploadProgress(pct));
+      const response = await documentService.uploadWithProgress(formData, (pct) => setUploadProgress(pct));
+      
+      // Trigger notifications and start polling for each uploaded document
+      if (response && response.data) {
+        // response.data could be an array if it's a bulk upload, or a single object.
+        const docs = Array.isArray(response.data) ? response.data : [response.data];
+        docs.forEach((doc: any) => {
+           notificationService.notifyUploadComplete(doc.title || 'Document', doc._id);
+           DeviceEventEmitter.emit('START_DOCUMENT_POLLING', { id: doc._id, name: doc.title || 'Document' });
+        });
+      }
+
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       showToast(`${pickedFiles.length} file${pickedFiles.length > 1 ? 's' : ''} uploaded!`, 'success');
       setPickedFiles([]);
@@ -235,7 +247,14 @@ export default function CaptureScreen({ route }: Props) {
     if (!pasteText.trim()) return;
     setIsUploading(true);
     try {
-      await documentService.uploadText(pasteText.trim(), textTitle.trim() || undefined);
+      const response = await documentService.uploadText(pasteText.trim(), textTitle.trim() || undefined);
+      
+      if (response && response.data) {
+        const doc = response.data;
+        notificationService.notifyUploadComplete(doc.title || 'Text Snippet', doc._id);
+        DeviceEventEmitter.emit('START_DOCUMENT_POLLING', { id: doc._id, name: doc.title || 'Text Snippet' });
+      }
+
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       showToast('Text snippet saved!', 'success');
       setPasteText('');

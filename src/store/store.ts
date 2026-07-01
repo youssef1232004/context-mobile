@@ -1,14 +1,16 @@
 import { configureStore, combineReducers } from '@reduxjs/toolkit';
-import authReducer from './authSlice';
-import folderReducer from './folderSlice';
-import documentReducer from './documentSlice';
-import comparisonReducer from './comparisonSlice';
+import authReducer from '../features/auth/store/authSlice';
+import folderReducer from '../features/folders/store/folderSlice';
+import documentReducer from '../features/documents/store/documentSlice';
+import comparisonReducer from '../features/comparison/store/comparisonSlice';
+import settingsReducer from '../features/settings/store/settingsSlice';
 
 const appReducer = combineReducers({
   auth: authReducer,
   folder: folderReducer,
   document: documentReducer,
   comparison: comparisonReducer,
+  settings: settingsReducer,
 });
 
 /**

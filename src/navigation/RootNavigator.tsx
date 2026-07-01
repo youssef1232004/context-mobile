@@ -1,23 +1,26 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { View, ActivityIndicator, DeviceEventEmitter } from 'react-native';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { useSelector } from 'react-redux';
 import { useTheme } from '../context/ThemeContext';
 import { useAppDispatch } from '../store/hooks';
-import { restoreSession, logout } from '../store/authSlice';
+import { restoreSession, logout } from '../features/auth/store/authSlice';
 import type { RootState } from '../store/store';
 import AuthStack from './AuthStack';
 import MainTabNavigator from './MainTabNavigator';
 import ProfileStack from './ProfileStack';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useSSE } from '../hooks/useSSE';
-import { Toast } from '../components/Toast';
+import { Toast } from '../components/ui/Toast';
 import { TOAST_EVENT } from '../services/toastEmitter';
-import type { ToastVariant } from '../components/Toast';
+import type { ToastVariant } from '../components/ui/Toast';
+import { useNotifications } from '../hooks/useNotifications';
+import type { NotificationPayload } from '../services/notificationService';
 
 import BootSequenceScreen from '../features/auth/screens/BootSequenceScreen';
 
 const Stack = createNativeStackNavigator();
+export const navigationRef = createNavigationContainerRef<any>();
 
 interface GlobalToastState {
   visible: boolean;
@@ -25,11 +28,16 @@ interface GlobalToastState {
   variant: ToastVariant;
 }
 
+import { useDocumentAnalysisPoller } from '../hooks/useDocumentAnalysisPoller';
+
 function AppStack() {
   const [isBooting, setIsBooting] = useState(true);
 
   // ── App-level SSE: stays connected across all tabs ──
   useSSE();
+
+  // ── Document Analysis Poller: checks status and sends notifications ──
+  useDocumentAnalysisPoller();
 
   // ── Global Toast: receives events from toastEmitter.show() ──
   const [globalToast, setGlobalToast] = useState<GlobalToastState>({
@@ -76,6 +84,20 @@ export default function RootNavigator() {
   const isAuthenticated = useSelector((state: RootState) => state.auth.isAuthenticated);
   const [isRestoring, setIsRestoring] = useState(true);
 
+  // Setup notifications and handle taps
+  useNotifications((payload: NotificationPayload) => {
+    if (payload.documentId && navigationRef.isReady()) {
+      // If it's a document-related notification, navigate to the reading screen
+      navigationRef.navigate('MainTabs', {
+        screen: 'HomeStack',
+        params: {
+          screen: 'Reading',
+          params: { documentId: payload.documentId }
+        }
+      });
+    }
+  });
+
   useEffect(() => {
     const restore = async () => {
       await dispatch(restoreSession());
@@ -102,8 +124,9 @@ export default function RootNavigator() {
   }
 
   return (
-    <NavigationContainer>
+    <NavigationContainer ref={navigationRef}>
       {isAuthenticated ? <AppStack /> : <AuthStack />}
     </NavigationContainer>
   );
 }
+

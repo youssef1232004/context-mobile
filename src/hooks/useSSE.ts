@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import type { AppDispatch, RootState } from '../store/store';
-import { updateDocumentStatuses } from '../store/folderSlice';
+import { updateDocumentStatuses } from '../features/folders/store/folderSlice';
 import { toastEmitter } from '../services/toastEmitter';
 import { api } from '../services/api';
 

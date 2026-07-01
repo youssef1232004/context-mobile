@@ -8,6 +8,7 @@ export interface FolderData {
   parentFolder: string | null;
   path: string;
   isPinned: boolean;
+  color?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -58,7 +59,7 @@ export const folderService = {
   },
 
   /** POST /folders — create a folder */
-  create: async (payload: { name: string; parentFolder?: string }) => {
+  create: async (payload: { name: string; parentFolder?: string; color?: string }) => {
     const response = await api.post('/folders', payload);
     return response.data;
   },
@@ -73,5 +74,23 @@ export const folderService = {
   delete: async (id: string) => {
     const response = await api.delete(`/folders/${id}`);
     return response.data;
+  },
+
+  /** PUT /folders/:id/color */
+  setColor: async (id: string, color: string) => {
+    const response = await api.put(`/folders/${id}`, { color });
+    return response.data;
+  },
+
+  /** PATCH /folders/:id/move */
+  moveFolder: async (id: string, targetParentFolderId: string | null) => {
+    const response = await api.patch(`/folders/${id}/move`, { targetParentFolderId });
+    return response.data;
+  },
+
+  /** POST /folders/:id/copy */
+  copyFolder: async (id: string, targetParentFolderId: string | null): Promise<FolderData> => {
+    const response = await api.post(`/folders/${id}/copy`, { targetParentFolderId });
+    return response.data.data;
   },
 };

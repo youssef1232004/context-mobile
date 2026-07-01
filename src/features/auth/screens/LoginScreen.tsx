@@ -11,11 +11,11 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../context/ThemeContext';
-import { Input } from '../../../components/Input';
-import { Button } from '../../../components/Button';
-import { GradientLine } from '../../../components/GradientLine';
+import { Input } from '../../../components/ui/Input';
+import { Button } from '../../../components/ui/Button';
+import { GradientLine } from '../../../components/ui/GradientLine';
 import { useAppDispatch, useAppSelector } from '../../../store/hooks';
-import { loginUser, clearError } from '../../../store/authSlice';
+import { loginUser, clearError } from '../store/authSlice';
 import { Spacing, BorderRadius, Typography } from '../../../theme';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 

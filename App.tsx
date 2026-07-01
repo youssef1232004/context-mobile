@@ -12,6 +12,7 @@ import { Rajdhani_700Bold } from '@expo-google-fonts/rajdhani';
 import { Inter_400Regular, Inter_500Medium, Inter_700Bold } from '@expo-google-fonts/inter';
 import { JetBrainsMono_700Bold } from '@expo-google-fonts/jetbrains-mono';
 import { FiraCode_400Regular } from '@expo-google-fonts/fira-code';
+import { notificationService } from './src/services/notificationService';
 
 export default function App() {
   const [fontsLoaded] = useFonts({
@@ -22,6 +23,10 @@ export default function App() {
     'JetBrainsMono-Bold': JetBrainsMono_700Bold,
     'FiraCode-Regular': FiraCode_400Regular,
   });
+
+  React.useEffect(() => {
+    // Setup now handled inside useNotifications hook inside RootNavigator
+  }, []);
 
   if (!fontsLoaded) {
     return (
