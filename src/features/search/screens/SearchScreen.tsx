@@ -13,10 +13,10 @@ import { useNavigation } from '@react-navigation/native';
 
 // Icon mapping for document types returned by the backend
 const TYPE_ICONS: Record<string, { name: React.ComponentProps<typeof Ionicons>['name']; color: string }> = {
-  PDF:         { name: 'document-text', color: '#ef4444' },
-  Word:        { name: 'document',      color: '#3b82f6' },
-  Image:       { name: 'image',         color: '#8b5cf6' },
-  TextSnippet: { name: 'reader',        color: '#f59e0b' },
+  PDF: { name: 'document-text', color: '#ef4444' },
+  Word: { name: 'document', color: '#3b82f6' },
+  Image: { name: 'image', color: '#8b5cf6' },
+  TextSnippet: { name: 'reader', color: '#f59e0b' },
 };
 
 export default function SearchScreen() {

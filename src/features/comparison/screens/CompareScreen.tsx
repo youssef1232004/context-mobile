@@ -128,7 +128,7 @@ export default function CompareScreen({ route }: { route?: any }) {
   };
 
   useEffect(() => {
-    if (historyOpen && historyList.length === 0) {
+    if (historyOpen) {
       loadHistory();
     }
   }, [historyOpen]);
@@ -176,6 +176,7 @@ export default function CompareScreen({ route }: { route?: any }) {
     }
     try {
       await dispatch(compareDocuments({ selectedIds: selected, documents })).unwrap();
+      loadHistory();
     } catch (e: any) {
       const errorMsg = typeof e === 'string' ? e : (e?.message || 'Comparison failed');
       showToast(errorMsg, 'error');

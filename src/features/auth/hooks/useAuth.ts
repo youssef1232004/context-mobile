@@ -1,5 +1,5 @@
 import { useAppSelector, useAppDispatch } from '../../../store/hooks';
-import { logout, clearError } from '../store/authSlice';
+import { logoutUser, clearError } from '../store/authSlice';
 import type { RootState } from '../../../store/store';
 
 /**
@@ -18,7 +18,7 @@ export function useAuth() {
     isLoading: status === 'loading',
     status,
     error,
-    logout: () => dispatch(logout()),
+    logout: () => dispatch(logoutUser()),
     clearError: () => dispatch(clearError()),
   };
 }

@@ -43,4 +43,9 @@ export const authService = {
     });
     return response.data;
   },
+
+  saveFCMToken: async (fcmToken: string) => {
+    const response = await api.post('/users/fcm-token', { fcmToken });
+    return response.data;
+  }
 };

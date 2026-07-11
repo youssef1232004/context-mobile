@@ -52,6 +52,11 @@ export const FolderItem = React.memo(({
       )}
       <View style={{ width: 42, height: 42, borderRadius: 12, backgroundColor: `${folderColorHex}1F`, alignItems: 'center', justifyContent: 'center' }}>
         <Ionicons name="folder" size={22} color={folderColorHex} />
+        {folder.isAIGenerated && (
+          <View style={{ position: 'absolute', bottom: -4, right: -4, width: 16, height: 16, borderRadius: 8, backgroundColor: '#10b981', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: isDark ? '#18181B' : '#fff' }}>
+            <Ionicons name="git-branch" size={10} color="#fff" />
+          </View>
+        )}
       </View>
       <View style={{ flex: 1 }}>
         <Text style={{ fontSize: Typography.sizes.base, fontWeight: '700', color: colors.text }}>{folder.name}</Text>

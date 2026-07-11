@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, ScrollView, RefreshControl, ActivityIndicator } from 'react-native';
+import { View, ScrollView, RefreshControl, ActivityIndicator, DeviceEventEmitter } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../context/ThemeContext';
@@ -59,6 +59,15 @@ export default function HomeScreen() {
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Auto-refresh when analysis completes (fired by poller or notification)
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener('REFRESH_HOME', () => {
+      fetchData(true);
+    });
+    return () => sub.remove();
+  }, [fetchData]);
+
 
   const onRefresh = () => { setRefreshing(true); fetchData(true); };
 

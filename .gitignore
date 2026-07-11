@@ -32,6 +32,7 @@ yarn-error.*
 
 # local env files
 .env
+.env.*
 .env*.local
 
 # typescript
@@ -40,3 +41,19 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Test coverage reports
+coverage/
+
+# Firebase / Google services (contains API keys - keep out of git)
+google-services.json
+GoogleService-Info.plist
+
+# Temporary / one-off scripts used during development
+fix_*.js
+refactor.js
+
+# Internal dev docs (not for public repo)
+implementation_plan.md
+mobile_audit_report.md
+mobile_handover_state.md

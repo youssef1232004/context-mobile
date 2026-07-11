@@ -71,48 +71,64 @@ export function htmlToMarkdown(text: string): string {
     .replace(/<\/?[^>]+(>|$)/g, '');
 }
 
-export function getListItems(
-  section: DocumentPrettifyResult['sections'][number]
-): { items: string[]; type: 'bullet' | 'numbered' } | null {
-  if (section.numberedItems && section.numberedItems.length > 0) {
-    return { items: section.numberedItems, type: 'numbered' };
-  }
-  if (section.bulletItems && section.bulletItems.length > 0) {
-    return { items: section.bulletItems, type: 'bullet' };
-  }
-  if (section.items && section.items.length > 0) {
-    return { items: section.items, type: 'bullet' };
-  }
-  return null;
-}
-
 export function convertToMarkdown(json: DocumentPrettifyResult): string {
   const isRtl = json.direction === 'rtl';
+  
+  // Pre-pass for numbered list items to generate correct numbering
+  const listNumbers: number[] = [];
+  let currentNum = 0;
+  (json.blocks || []).forEach((block) => {
+    if (block.type === 'heading' || block.type === 'divider' || block.type === 'table') {
+      currentNum = 0;
+    } else if (block.type === 'numbered_list_item') {
+      currentNum++;
+    }
+    listNumbers.push(currentNum);
+  });
 
-  const body = json.sections
-    .map((section) => {
-      const prefix = '#'.repeat(section.level);
-      let md = `${prefix} ${htmlToMarkdown(section.heading)}\n\n`;
+  const body = (json.blocks || []).map((block, bi) => {
+    if (block.type === 'heading') {
+      const prefix = '#'.repeat(Math.min(block.level, 6));
+      return `${prefix} ${htmlToMarkdown(block.text)}\n\n`;
+    }
+    
+    if (block.type === 'paragraph') {
+      return `${htmlToMarkdown(block.text)}\n\n`;
+    }
+    
+    if (block.type === 'quote') {
+      return `> ${htmlToMarkdown(block.text)}\n\n`;
+    }
+    
+    if (block.type === 'code') {
+      return `\`\`\`${block.language || ''}\n${block.text}\n\`\`\`\n\n`;
+    }
+    
+    if (block.type === 'bullet_list_item') {
+      return `- ${htmlToMarkdown(block.text)}\n`;
+    }
+    
+    if (block.type === 'numbered_list_item') {
+      const num = listNumbers[bi];
+      return `${num}. ${htmlToMarkdown(block.text)}\n`;
+    }
+    
+    if (block.type === 'mcq_option') {
+      return `${block.letter}) ${htmlToMarkdown(block.text)}\n`;
+    }
+    
+    if (block.type === 'table') {
+      const mdTable = `| ${block.headers.join(' | ')} |\n| ${block.headers.map(() => '---').join(' | ')} |\n${block.rows.map(row => `| ${row.join(' | ')} |`).join('\n')}`;
+      return `${mdTable}\n\n`;
+    }
+    
+    if (block.type === 'divider') {
+      return `---\n\n`;
+    }
 
-      if (section.content) {
-        md += `${htmlToMarkdown(section.content)}\n\n`;
-      }
+    return '';
+  }).join('');
 
-      const listData = getListItems(section);
-      if (listData) {
-        if (listData.type === 'numbered') {
-          md +=
-            listData.items
-              .map((item, i) => `${i + 1}. ${htmlToMarkdown(item)}`)
-              .join('\n') + '\n\n';
-        } else {
-          md += listData.items.map((item) => `- ${htmlToMarkdown(item)}`).join('\n') + '\n\n';
-        }
-      }
-
-      return md;
-    })
-    .join('');
-
-  return body;
+  // Clean up consecutive newlines (more than 2)
+  return body.replace(/\n{3,}/g, '\n\n');
 }

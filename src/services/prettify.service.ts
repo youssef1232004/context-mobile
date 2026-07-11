@@ -9,18 +9,22 @@ export interface ExcelPrettifyResult {
   metadata?: { detectedType: string; patterns: string[] };
 }
 
+export type PrettifyBlock = 
+  | { type: 'heading', level: number, text: string }
+  | { type: 'paragraph', text: string }
+  | { type: 'code', language?: string | null, text: string }
+  | { type: 'quote', text: string }
+  | { type: 'bullet_list_item', text: string }
+  | { type: 'numbered_list_item', text: string }
+  | { type: 'mcq_option', letter: string, text: string }
+  | { type: 'table', headers: string[], rows: string[][] }
+  | { type: 'divider' };
+
 export interface DocumentPrettifyResult {
   type: 'document';
   language: string;
   direction: 'rtl' | 'ltr';
-  sections: Array<{
-    heading: string;
-    level: 1 | 2 | 3 | 4 | 5;
-    content?: string | null;
-    bulletItems?: string[] | null;
-    numberedItems?: string[] | null;
-    items?: string[] | null; // legacy
-  }>;
+  blocks: PrettifyBlock[];
   metadata?: { detectedType: string; patterns: string[] };
 }
 

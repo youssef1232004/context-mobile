@@ -81,8 +81,8 @@ export const LibraryHeader = React.memo(({
             <TouchableOpacity onPress={() => onNavigateToFolder(null)}>
               <Text style={{ fontSize: 12, fontWeight: '700', color: colors.primary }}>Root</Text>
             </TouchableOpacity>
-            {breadcrumbs.map((bc, index) => (
-              <View key={bc._id || `bc-${index}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            {breadcrumbs.filter(bc => ((bc as any).id || bc._id) !== currentFolder?._id).map((bc, index) => (
+              <View key={(bc as any).id || bc._id || `bc-${index}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                 <Ionicons name="chevron-forward" size={12} color={colors.textSecondary} />
                 <TouchableOpacity onPress={() => onNavigateToFolder(bc)}>
                   <Text style={{ fontSize: 12, fontWeight: '700', color: getFolderColorHex(bc.color || 'yellow') }}>{bc.name}</Text>

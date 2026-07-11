@@ -52,14 +52,14 @@ export function OriginalViewer({
                 <Text style={{ marginTop: Spacing.md, fontSize: 13, fontWeight: '600', color: colors.textSecondary }}>Loading Native PDF Viewer…</Text>
               </View>
             )}
-            onLoadComplete={(numberOfPages,filePath) => {
-                console.log(`Number of pages: ${numberOfPages}`);
+            onLoadComplete={(numberOfPages, filePath) => {
+              console.log(`Number of pages: ${numberOfPages}`);
             }}
-            onPageChanged={(page,numberOfPages) => {
-                console.log(`Current page: ${page}`);
+            onPageChanged={(page, numberOfPages) => {
+              console.log(`Current page: ${page}`);
             }}
             onError={(error) => {
-                console.log(error);
+              console.log(error);
             }}
           />
         </View>

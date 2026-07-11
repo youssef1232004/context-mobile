@@ -225,7 +225,7 @@ export default function CaptureScreen({ route }: Props) {
         // response.data could be an array if it's a bulk upload, or a single object.
         const docs = Array.isArray(response.data) ? response.data : [response.data];
         docs.forEach((doc: any) => {
-           notificationService.notifyUploadComplete(doc.title || 'Document', doc._id);
+
            DeviceEventEmitter.emit('START_DOCUMENT_POLLING', { id: doc._id, name: doc.title || 'Document' });
         });
       }
@@ -251,7 +251,7 @@ export default function CaptureScreen({ route }: Props) {
       
       if (response && response.data) {
         const doc = response.data;
-        notificationService.notifyUploadComplete(doc.title || 'Text Snippet', doc._id);
+
         DeviceEventEmitter.emit('START_DOCUMENT_POLLING', { id: doc._id, name: doc.title || 'Text Snippet' });
       }
 

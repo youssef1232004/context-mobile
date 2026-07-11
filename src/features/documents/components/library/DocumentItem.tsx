@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, Text, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPressable } from '../../../../components/ui/AnimatedPressable';
 import { CognitiveLoadBadge } from '../../../../components/ui/CognitiveLoadBadge';
@@ -69,6 +69,21 @@ export const DocumentItem = React.memo(({
 
       <View style={{ width: 42, height: 42, borderRadius: 12, backgroundColor: `${ic.color}18`, alignItems: 'center', justifyContent: 'center' }}>
         <Ionicons name={ic.name} size={20} color={ic.color} />
+        {doc.aiStatus === 'Failed' && (
+          <View style={{ position: 'absolute', bottom: -4, right: -4, width: 16, height: 16, borderRadius: 8, backgroundColor: '#ef4444', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: isDark ? '#18181B' : '#fff' }}>
+            <Text style={{ color: '#fff', fontSize: 10, fontWeight: 'bold' }}>!</Text>
+          </View>
+        )}
+        {(doc.aiStatus === 'Processing' || doc.aiStatus === 'Pending') && (
+          <View style={{ position: 'absolute', bottom: -4, right: -4, width: 16, height: 16, borderRadius: 8, backgroundColor: '#3b82f6', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: isDark ? '#18181B' : '#fff' }}>
+            <Ionicons name="sync" size={10} color="#fff" />
+          </View>
+        )}
+        {doc.isOrganized && doc.aiStatus !== 'Failed' && doc.aiStatus !== 'Processing' && doc.aiStatus !== 'Pending' && (
+          <View style={{ position: 'absolute', bottom: -4, right: -4, width: 16, height: 16, borderRadius: 8, backgroundColor: '#10b981', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: isDark ? '#18181B' : '#fff' }}>
+            <Ionicons name="git-branch" size={10} color="#fff" />
+          </View>
+        )}
       </View>
 
       <View style={{ flex: 1, gap: 3 }}>
@@ -92,9 +107,18 @@ export const DocumentItem = React.memo(({
       <CognitiveLoadBadge load={doc.cognitiveLoad} compact />
 
       {!isSelecting && (
-        <TouchableOpacity onPress={() => onActionPress(doc)} style={{ padding: 4 }} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-          <Ionicons name="ellipsis-vertical" size={16} color={colors.textSecondary} />
-        </TouchableOpacity>
+        <Pressable
+          onPress={() => onActionPress(doc)}
+          onStartShouldSetResponder={() => true}
+          onMoveShouldSetResponder={() => false}
+          style={({ pressed }) => ({
+            padding: 8,
+            opacity: pressed ? 0.5 : 1,
+          })}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        >
+          <Ionicons name="ellipsis-vertical" size={18} color={colors.textSecondary} />
+        </Pressable>
       )}
     </AnimatedPressable>
   );

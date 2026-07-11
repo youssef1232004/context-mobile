@@ -11,7 +11,7 @@ Notifications.setNotificationHandler({
 });
 
 export type NotificationPayload = {
-  type: 'UPLOAD_COMPLETE' | 'ANALYSIS_READY' | 'ANALYSIS_FAILED';
+  type: 'UPLOAD_COMPLETE' | 'ANALYSIS_READY' | 'ANALYSIS_FAILED' | 'ANALYSIS_COMPLETE' | 'SUGGESTED_FOCUS';
   documentId?: string;
   [key: string]: any;
 };
@@ -80,6 +80,14 @@ export const notificationService = {
       '✨ Analysis Ready',
       `'${documentName}' insights are ready! Tap to view.`,
       { type: 'ANALYSIS_READY', documentId }
+    );
+  },
+
+  notifyAnalysisComplete: (documentName: string, documentId: string) => {
+    return notificationService.scheduleLocalNotification(
+      '✨ Analysis Complete',
+      `'${documentName}' is ready! Tap to open.`,
+      { type: 'ANALYSIS_COMPLETE', documentId }
     );
   },
 

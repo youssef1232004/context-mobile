@@ -1,12 +1,12 @@
 import { useEffect, useRef } from 'react';
 import { DeviceEventEmitter } from 'react-native';
 import { documentService } from '../features/documents/api/documentService';
-import { useNotifications } from './useNotifications';
-
+import { useDispatch } from 'react-redux';
+import { updateDocumentStatus } from '../features/folders/store/folderSlice';
 export const START_POLLING_EVENT = 'START_DOCUMENT_POLLING';
 
 export const useDocumentAnalysisPoller = () => {
-  const { notifyAnalysisReady, notifyAnalysisFailed } = useNotifications();
+  const dispatch = useDispatch();
   // Map of documentId -> { name }
   const pollingQueue = useRef<Map<string, { name: string }>>(new Map());
   const timerRef = useRef<NodeJS.Timeout>();
@@ -30,12 +30,15 @@ export const useDocumentAnalysisPoller = () => {
             const docInfo = pollingQueue.current.get(_id);
             if (!docInfo) return;
 
-            // Trigger notification based on status
+            // Trigger Redux update based on status
             if (aiStatus === 'Analyzed') {
-              notifyAnalysisReady(title || docInfo.name, _id);
+              dispatch(updateDocumentStatus({ id: _id, status: 'Analyzed' }));
+              // Refresh Home Screen to show updated Suggested Focus
+              DeviceEventEmitter.emit('REFRESH_HOME');
               pollingQueue.current.delete(_id);
             } else if (aiStatus === 'Failed') {
-              notifyAnalysisFailed(title || docInfo.name, _id);
+              dispatch(updateDocumentStatus({ id: _id, status: 'Failed' }));
+              DeviceEventEmitter.emit('REFRESH_HOME');
               pollingQueue.current.delete(_id);
             }
           });
@@ -49,5 +52,5 @@ export const useDocumentAnalysisPoller = () => {
       sub.remove();
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [notifyAnalysisReady, notifyAnalysisFailed]);
+  }, []);
 };
