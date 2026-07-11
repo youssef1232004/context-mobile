@@ -19,7 +19,7 @@ import { Card } from '../../../components/ui/Card';
 import { Button } from '../../../components/ui/Button';
 import { SectionLabel } from '../../../components/ui/SectionLabel';
 import { useAppDispatch, useAppSelector } from '../../../store/hooks';
-import { updateProfile, logout } from '../../auth/store/authSlice';
+import { updateProfile, logoutUser } from '../../auth/store/authSlice';
 import { authService } from '../../../features/auth/api/authService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Spacing, BorderRadius, Typography } from '../../../theme';
@@ -186,7 +186,7 @@ export default function ProfileScreen({ navigation }: Props) {
   const handleLogout = () => {
     Alert.alert('Logout', 'Are you sure you want to disconnect?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Disconnect', style: 'destructive', onPress: () => dispatch(logout()) },
+      { text: 'Disconnect', style: 'destructive', onPress: () => dispatch(logoutUser()) },
     ]);
   };
 

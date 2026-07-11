@@ -9,7 +9,7 @@ import { Spacing, BorderRadius } from '../../../../theme';
 import { useAppDispatch } from '../../../../store/hooks';
 import { prettifyDocument, updateDocumentPrettifiedJson } from '../../store/documentSlice';
 import type { Document } from '../../api/documentService';
-import { computeCapacity, convertToMarkdown } from '../../../../utils/prettify-helpers';
+import { computeCapacity, convertToMarkdown, stripHtml } from '../../../../utils/prettify-helpers';
 import { PrettifyDocumentView } from './PrettifyDocumentView';
 import { PrettifyExcelView } from './PrettifyExcelView';
 import { useToast } from '../../../../hooks/useToast';
@@ -45,23 +45,38 @@ export const PrettifyViewer: React.FC<PrettifyViewerProps> = ({ document: doc })
   const handleShareText = async () => {
     const result = prettifyState.result;
     if (!result || result.type !== 'document') return;
-    
+
     try {
       showToast('Generating .docx...', 'info');
       const title = doc.title.replace(/\.[^/.]+$/, '');
       const fileUri = `${FileSystem.cacheDirectory}${title} - Organized.docx`;
 
       const children: any[] = [];
-      result.sections.forEach(sec => {
-        children.push(new Paragraph({ text: stripHtml(sec.heading), heading: HeadingLevel.HEADING_2 }));
-        if (sec.content) {
-          children.push(new Paragraph({ text: stripHtml(sec.content) }));
-        }
-        const listData = getListItems(sec);
-        if (listData) {
-          listData.items.forEach(item => {
-            children.push(new Paragraph({ text: stripHtml(item), bullet: { level: 0 } }));
+      (result.blocks || []).forEach(block => {
+        if (block.type === 'heading') {
+          let headingLevel = HeadingLevel.HEADING_1;
+          if (block.level === 2) headingLevel = HeadingLevel.HEADING_2;
+          if (block.level === 3) headingLevel = HeadingLevel.HEADING_3;
+          if (block.level === 4) headingLevel = HeadingLevel.HEADING_4;
+          if (block.level === 5) headingLevel = HeadingLevel.HEADING_5;
+          if (block.level === 6) headingLevel = HeadingLevel.HEADING_6;
+          children.push(new Paragraph({ text: stripHtml(block.text), heading: headingLevel }));
+        } else if (block.type === 'paragraph' || block.type === 'quote') {
+          children.push(new Paragraph({ text: stripHtml(block.text) }));
+        } else if (block.type === 'code') {
+          children.push(new Paragraph({ text: block.text }));
+        } else if (block.type === 'bullet_list_item' || block.type === 'mcq_option') {
+          const text = block.type === 'mcq_option' ? `${block.letter}) ${stripHtml(block.text)}` : stripHtml(block.text);
+          children.push(new Paragraph({ text, bullet: { level: 0 } }));
+        } else if (block.type === 'numbered_list_item') {
+          children.push(new Paragraph({ text: stripHtml(block.text), bullet: { level: 0 } }));
+        } else if (block.type === 'table') {
+          children.push(new Paragraph({ text: block.headers.map(cell => stripHtml(cell)).join(' | ') }));
+          block.rows.forEach(row => {
+            children.push(new Paragraph({ text: row.map(cell => stripHtml(cell)).join(' | ') }));
           });
+        } else if (block.type === 'divider') {
+          children.push(new Paragraph({ text: '---' }));
         }
       });
 
@@ -69,9 +84,9 @@ export const PrettifyViewer: React.FC<PrettifyViewerProps> = ({ document: doc })
         sections: [{ children }]
       });
 
-      const base64Str = await Packer.toBase64(docxFile);
+      const base64Str = await Packer.toBase64String(docxFile);
       await FileSystem.writeAsStringAsync(fileUri, base64Str, { encoding: FileSystem.EncodingType.Base64 });
-      
+
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(fileUri, {
           mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -89,7 +104,7 @@ export const PrettifyViewer: React.FC<PrettifyViewerProps> = ({ document: doc })
   const handleCopyText = async () => {
     const result = prettifyState.result;
     if (!result || result.type !== 'document') return;
-    
+
     try {
       const text = convertToMarkdown(result);
       await Clipboard.setStringAsync(text);
@@ -111,11 +126,11 @@ export const PrettifyViewer: React.FC<PrettifyViewerProps> = ({ document: doc })
         XLSX.utils.book_append_sheet(wb, ws, sheet.name || `Sheet${idx + 1}`);
       });
       const base64Str = XLSX.write(wb, { type: 'base64', bookType: 'xlsx' });
-      
+
       const title = doc.title.replace(/\.[^/.]+$/, '');
       const fileUri = `${FileSystem.cacheDirectory}${title} - Organized.xlsx`;
       await FileSystem.writeAsStringAsync(fileUri, base64Str, { encoding: FileSystem.EncodingType.Base64 });
-      
+
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(fileUri, {
           mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

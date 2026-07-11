@@ -4,7 +4,7 @@ import { NavigationContainer, createNavigationContainerRef } from '@react-naviga
 import { useSelector } from 'react-redux';
 import { useTheme } from '../context/ThemeContext';
 import { useAppDispatch } from '../store/hooks';
-import { restoreSession, logout } from '../features/auth/store/authSlice';
+import { restoreSession, logoutUser } from '../features/auth/store/authSlice';
 import type { RootState } from '../store/store';
 import AuthStack from './AuthStack';
 import MainTabNavigator from './MainTabNavigator';
@@ -86,10 +86,23 @@ export default function RootNavigator() {
 
   // Setup notifications and handle taps
   useNotifications((payload: NotificationPayload) => {
-    if (payload.documentId && navigationRef.isReady()) {
-      // If it's a document-related notification, navigate to the reading screen
+    if (!navigationRef.isReady()) return;
+
+    const type = (payload as any).type;
+
+    if ((type === 'ANALYSIS_COMPLETE' || type === 'ANALYSIS_READY' || type === 'SUGGESTED_FOCUS') && payload.documentId) {
+      // Navigate to the reading screen directly
       navigationRef.navigate('MainTabs', {
-        screen: 'HomeStack',
+        screen: 'Library',
+        params: {
+          screen: 'Reading',
+          params: { documentId: payload.documentId }
+        }
+      });
+    } else if (payload.documentId) {
+      // Fallback for other notifications with documentId
+      navigationRef.navigate('MainTabs', {
+        screen: 'Library',
         params: {
           screen: 'Reading',
           params: { documentId: payload.documentId }
@@ -107,7 +120,7 @@ export default function RootNavigator() {
 
     // Listen for global 401s
     const subscription = DeviceEventEmitter.addListener('auth-expired', () => {
-      dispatch(logout());
+      dispatch(logoutUser());
     });
 
     return () => {

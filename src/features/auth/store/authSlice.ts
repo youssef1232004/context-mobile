@@ -1,6 +1,7 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { secureStorage } from '../../../services/secureStorage';
 import { authService } from '../api/authService';
+import { fcmService } from '../../../services/fcmService';
 import type {
   LoginFormValues,
   RegisterFormValues,
@@ -44,6 +45,20 @@ export const loginUser = createAsyncThunk(
       const data = await authService.login(credentials);
       await secureStorage.setToken(data.token);
       await secureStorage.setUser(data.user);
+      
+      // Save FCM Token
+      try {
+        const hasPermission = await fcmService.requestPermission();
+        if (hasPermission) {
+          const fcmToken = await fcmService.getFCMToken();
+          if (fcmToken) {
+            await authService.saveFCMToken(fcmToken);
+          }
+        }
+      } catch (fcmError) {
+        console.error('Failed to save FCM token during login:', fcmError);
+      }
+
       return data;
     } catch (error: unknown) {
       return rejectWithValue(getErrorMessage(error, 'Login failed'));
@@ -92,6 +107,21 @@ export const restoreSession = createAsyncThunk(
     } catch {
       return rejectWithValue('Failed to restore session');
     }
+  }
+);
+
+export const logoutUser = createAsyncThunk(
+  'auth/logout',
+  async (_, { rejectWithValue }) => {
+    try {
+      // Unregister FCM token from backend so we don't get push notifications when logged out
+      await authService.saveFCMToken(null as any);
+    } catch (error) {
+      console.log('Failed to unregister FCM token on logout', error);
+      // We still want to log out locally even if this fails
+    }
+    await secureStorage.clearAll();
+    return null;
   }
 );
 
@@ -173,6 +203,13 @@ const authSlice = createSlice({
           state.token = action.payload.token;
           state.isAuthenticated = true;
         }
+      })
+      // Logout
+      .addCase(logoutUser.fulfilled, (state) => {
+        state.user = null;
+        state.token = null;
+        state.isAuthenticated = false;
+        state.status = 'idle';
       });
   },
 });

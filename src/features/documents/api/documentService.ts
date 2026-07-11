@@ -112,7 +112,7 @@ export const documentService = {
 
   /**
    * GET /documents/suggested-focus
-   * Returns the top-2 documents ranked by the backend's SuggestedFocusService:
+   * Returns the top-2 documents ranked by the backend's SuggestedFocusService (lowest score first):
    * score = cognitiveLoad (Heavy=3, Medium=2, Light=1) + recency decay (30-day window) + isUnread bonus (+2)
    * Only surfaces documents with aiStatus === 'Analyzed'.
    */
@@ -142,7 +142,7 @@ export const documentService = {
   },
 
   downloadBulkZip: async (documentIds: string[], folderIds: string[]) => {
-    const response = await api.post('/documents/bulk-download', { documentIds, folderIds }, {
+    const response = await api.post('/documents/download-bulk', { documentIds, folderIds }, {
       responseType: 'blob'
     });
     return response.data;

@@ -1,5 +1,6 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, RefreshControl, ActivityIndicator, BackHandler, Platform, Share } from 'react-native';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { View, Text, RefreshControl, ActivityIndicator, BackHandler, Platform, Share, Modal, TouchableOpacity } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../../../context/ThemeContext';
 import { SkeletonLoader } from '../../../components/ui/SkeletonLoader';
@@ -7,11 +8,13 @@ import { BulkActionBar } from '../../../components/layout/BulkActionBar';
 import { DocumentActionSheet, RenameDialog, ConfirmDialog, FolderActionSheet, SmartActionSheet } from '../../../components/ui/Dialogs';
 import { CreateFolderDialog } from '../../../components/ui/CreateFolderDialog';
 import { FolderPickerBottomSheet } from '../../../components/ui/FolderPickerBottomSheet';
+import { FolderColorPicker } from '../../../components/ui/FolderColorPicker';
 import { Toast } from '../../../components/ui/Toast';
 import { useToast } from '../../../hooks/useToast';
+import { useLibraryCache } from '../../../hooks/useLibraryCache';
 import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '../../../store/store';
-import { fetchFolderContents, createFolderThunk, moveItemsThunk, copyItemsThunk, setFolderColorThunk } from '../../folders/store/folderSlice';
+import { fetchFolderContents, fetchFolderTree, createFolderThunk, moveItemsThunk, copyItemsThunk, setFolderColorThunk, updateDocumentStatus } from '../../folders/store/folderSlice';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { FlashList } from '@shopify/flash-list';
@@ -57,6 +60,15 @@ export default function LibraryScreen({ navigation }: Props) {
   const isSelecting = selectedDocIds.length > 0 || selectedFolderIds.length > 0;
   const selectedCount = selectedDocIds.length + selectedFolderIds.length;
 
+  const hasOrganizedDocs =
+    selectedDocIds.some((id) => documents.find((d) => d._id === id)?.isOrganized) ||
+    selectedFolderIds.some((id) => (folders.find((f) => f._id === id) as any)?.isAIGenerated);
+
+  const allDocsFailed =
+    selectedDocIds.length > 0 &&
+    selectedFolderIds.length === 0 &&
+    selectedDocIds.every((id) => documents.find((d) => d._id === id)?.aiStatus === 'Failed');
+
   // ── Dialog State ──
   const [renameDoc, setRenameDoc] = useState<Document | null>(null);
   const [deleteDoc, setDeleteDoc] = useState<Document | null>(null);
@@ -77,8 +89,29 @@ export default function LibraryScreen({ navigation }: Props) {
   const [createFolderVisible, setCreateFolderVisible] = useState(false);
   const [createFolderParentId, setCreateFolderParentId] = useState<string|null>(null);
 
+  const [editFolderColorVisible, setEditFolderColorVisible] = useState(false);
+  const [editingFolderColor, setEditingFolderColor] = useState<string>('yellow');
+
+  // ── Local State for Loading & Cache ──
+  const [targetFolderId, setTargetFolderId] = useState<string | undefined>(undefined);
+  const [hasInitialized, setHasInitialized] = useState(false);
+  const currentFolderIdRef = useRef<string | undefined>(undefined);
+  const fetchIdRef = useRef<number>(0);
+
   // ── Fetch ──
+  const { isCacheLoading } = useLibraryCache({
+    folderId: targetFolderId,
+    search: search.trim() || undefined,
+    sortBy,
+    sortOrder,
+    page: 1,
+    limit: 10
+  });
+
+  const isActuallyLoading = (!hasInitialized && !refreshing) ? true : (loading || isCacheLoading);
+
   const fetchContents = useCallback((folderId?: string, page = 1) => {
+    const currentFetchId = ++fetchIdRef.current;
     if (page > 1) setLoadingMore(true);
     dispatch(fetchFolderContents({
       folderId: folderId || undefined,
@@ -86,18 +119,18 @@ export default function LibraryScreen({ navigation }: Props) {
       sortBy, sortOrder,
       page, limit: 10
     })).finally(() => {
+      if (currentFetchId !== fetchIdRef.current) return;
       setRefreshing(false);
       setLoadingMore(false);
+      setHasInitialized(true);
     });
   }, [search, sortBy, sortOrder, dispatch]);
 
-  useEffect(() => { fetchContents(currentFolder?._id, 1); }, [sortBy, sortOrder]);
-  useEffect(() => { const t = setTimeout(() => fetchContents(currentFolder?._id, 1), 400); return () => clearTimeout(t); }, [search]);
-
   useFocusEffect(
     useCallback(() => {
-      fetchContents(currentFolder?._id, 1);
-    }, [currentFolder?._id, search, sortBy, sortOrder])
+      const t = setTimeout(() => fetchContents(currentFolderIdRef.current, 1), 300);
+      return () => clearTimeout(t);
+    }, [search, sortBy, sortOrder])
   );
 
   useFocusEffect(
@@ -127,7 +160,10 @@ export default function LibraryScreen({ navigation }: Props) {
   const navigateToFolder = useCallback((folder: FolderData | null) => {
     setSelectedDocIds([]);
     setSelectedFolderIds([]);
-    fetchContents(folder?._id || undefined);
+    const id = folder?._id || undefined;
+    currentFolderIdRef.current = id;
+    setTargetFolderId(id);
+    fetchContents(id);
   }, [fetchContents]);
 
   // ── Selection ──
@@ -138,10 +174,6 @@ export default function LibraryScreen({ navigation }: Props) {
   const toggleSelectFolder = useCallback((id: string) => {
     setSelectedFolderIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
   }, []);
-
-  const hasOrganizedDocs =
-    selectedDocIds.some((id) => documents.find((d) => d._id === id)?.isOrganized) ||
-    selectedFolderIds.some((id) => (folders.find((f) => f._id === id) as any)?.isAIGenerated);
 
   // ── Actions ──
   const handleShare = async (doc: Document) => {
@@ -193,7 +225,7 @@ export default function LibraryScreen({ navigation }: Props) {
       showToast('Folder deleted', 'success');
       setDeleteFolder(null);
       fetchContents(currentFolder?._id);
-    } catch { showToast('Delete failed', 'error'); }
+    } catch { showToast('Folder deleted failed', 'error'); }
   };
 
   const handleBulkDelete = async () => {
@@ -237,6 +269,25 @@ export default function LibraryScreen({ navigation }: Props) {
     }
   };
 
+  const handleRetryAnalysis = async () => {
+    if (!actionSheetItem || actionSheetMode !== 'document') return;
+    const doc = actionSheetItem as Document;
+    try {
+      // Optimistically set status to Processing immediately so the icon updates
+      dispatch(updateDocumentStatus({ id: doc._id, status: 'Processing' }));
+      setActionSheetVisible(false);
+      await documentService.reanalyze(doc._id);
+      showToast('Analysis restarted', 'success');
+      // Tell the poller to watch this document
+      const { DeviceEventEmitter } = require('react-native');
+      DeviceEventEmitter.emit('START_DOCUMENT_POLLING', doc._id);
+    } catch {
+      // Revert optimistic update on failure
+      dispatch(updateDocumentStatus({ id: doc._id, status: 'Failed' }));
+      showToast('Failed to restart analysis', 'error');
+    }
+  };
+
   const handleDownloadFolder = async (folder?: any) => {
     const targetFolder = folder?._id ? folder : currentFolder;
     if (!targetFolder) return;
@@ -263,34 +314,6 @@ export default function LibraryScreen({ navigation }: Props) {
     } catch (e: any) {
       console.error('Download failed:', e);
       showToast('Download failed', 'error');
-    }
-  };
-
-  const handleDownloadBulk = async () => {
-    if (selectedCount === 0) return;
-    try {
-      showToast('Preparing bulk download...', 'info');
-      const token = await secureStorage.getToken();
-      
-      const res = await documentService.downloadBulkZip(selectedDocIds, selectedFolderIds);
-      const fileUri = `${FileSystem.documentDirectory}bulk_download_${Date.now()}.zip`;
-      
-      // We got a Blob from axios, we need to save it. But React Native axios blob handling is tricky.
-      // Alternatively, use fetch directly or just call an endpoint that returns a stream.
-      // Wait, since we are in mobile, we can use FileSystem.downloadAsync for POST? No, it's GET only.
-      // It's safer to just let the backend handle it or build a temporary link.
-      // Let's assume the backend will return a signed URL or we do something else.
-      // Let's implement a workaround using fetch.
-      // Actually, standard fetch can return blob, then we can read as base64 and write.
-      // For now, let's keep it simple and skip complex blob handling if it's too much, but we have to provide download.
-      // Let's assume documentService.downloadBulkZip handles this and returns a base64 string or url.
-      // Assuming documentService.downloadBulkZip just throws for now if not fully implemented for RN.
-      showToast('Bulk download initiated', 'success');
-      setSelectedDocIds([]);
-      setSelectedFolderIds([]);
-    } catch (e: any) {
-      console.error('Bulk download failed:', e);
-      showToast('Bulk download failed', 'error');
     }
   };
 
@@ -328,6 +351,7 @@ export default function LibraryScreen({ navigation }: Props) {
     try {
       await dispatch(setFolderColorThunk({ folderId: (actionSheetItem as FolderData)._id, color })).unwrap();
       showToast('Folder color updated', 'success');
+      setEditFolderColorVisible(false);
       fetchContents(currentFolder?._id);
     } catch { showToast('Update color failed', 'error'); }
   };
@@ -359,14 +383,15 @@ export default function LibraryScreen({ navigation }: Props) {
         colors={colors}
         onPress={handleDocumentPress}
         onLongPress={toggleSelectDoc}
-        onActionPress={(doc) => {
-          setActionSheetItem(doc);
+        onActionPress={(d) => {
+          setActionSheetItem(d);
           setActionSheetMode('document');
           setActionSheetVisible(true);
         }}
       />
     );
-  }, [selectedDocIds, isSelecting, isDark, colors, handleDocumentPress, toggleSelectDoc]);
+  }, [selectedDocIds, isSelecting, isDark, colors, handleDocumentPress, toggleSelectDoc,
+      setActionSheetItem, setActionSheetMode, setActionSheetVisible]);
 
   const treeData = useSelector((state: RootState) => state.folder.tree);
 
@@ -388,8 +413,8 @@ export default function LibraryScreen({ navigation }: Props) {
         onShare={() => actionSheetItem && handleShare(actionSheetItem as Document)}
         onDownload={() => {}} // implement single doc download
         onDownloadFolder={() => handleDownloadFolder(actionSheetItem)}
-        onMove={() => { setFolderPickerMode('move'); setFolderPickerVisible(true); }}
-        onCopy={() => { setFolderPickerMode('copy'); setFolderPickerVisible(true); }}
+        onMove={() => { setFolderPickerMode('move'); dispatch(fetchFolderTree()); setFolderPickerVisible(true); }}
+        onCopy={() => { setFolderPickerMode('copy'); dispatch(fetchFolderTree()); setFolderPickerVisible(true); }}
         onRename={() => {
           if (actionSheetMode === 'document') setRenameDoc(actionSheetItem as Document);
           else if (actionSheetMode === 'folder') setRenameFolder(actionSheetItem as FolderData);
@@ -401,11 +426,13 @@ export default function LibraryScreen({ navigation }: Props) {
         }}
         onOrganizeAI={handleOrganizeAI}
         onSynthesizeAI={handleSynthesize}
+        onRetryAnalysis={handleRetryAnalysis}
         onSetFolderColor={() => {
-           // Wait, FolderColor is an interactive component. We should probably open another modal, or we can just pick one color.
-           // In this simplified version, let's just rotate colors or ignore if we didn't add the color picker to SmartActionSheet.
-           // Alternatively, since we have CreateFolderDialog with a color picker, we could create an EditFolderDialog.
-           // For now, skip it or we could do it differently. Let's rely on CreateFolderDialog for now.
+           setActionSheetVisible(false);
+           if (actionSheetMode === 'folder' && actionSheetItem) {
+             setEditingFolderColor((actionSheetItem as FolderData).color || 'yellow');
+             setTimeout(() => setEditFolderColorVisible(true), 300);
+           }
         }}
       />
 
@@ -441,6 +468,37 @@ export default function LibraryScreen({ navigation }: Props) {
         onConfirm={handleRenameFolder}
       />
 
+      <Modal visible={editFolderColorVisible} transparent animationType="fade" onRequestClose={() => setEditFolderColorVisible(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+          <TouchableOpacity style={{ flex: 1 }} onPress={() => setEditFolderColorVisible(false)} activeOpacity={1} />
+          <View style={{ backgroundColor: isDark ? '#1E1E22' : '#FFFFFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: Platform.OS === 'ios' ? 30 : 20 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 24, borderBottomWidth: 1, borderBottomColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }}>
+              <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>Folder Color</Text>
+              <TouchableOpacity onPress={() => setEditFolderColorVisible(false)} style={{ padding: 4 }}>
+                <Ionicons name="close" size={24} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+            <View style={{ paddingVertical: 16 }}>
+              <FolderColorPicker selectedColor={editingFolderColor} onSelectColor={setEditingFolderColor} isDark={isDark} />
+            </View>
+            <View style={{ flexDirection: 'row', paddingHorizontal: 24, paddingBottom: 24, gap: 16 }}>
+              <TouchableOpacity
+                onPress={() => setEditFolderColorVisible(false)}
+                style={{ flex: 1, padding: 16, borderRadius: 12, alignItems: 'center', backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }}
+              >
+                <Text style={{ fontWeight: '600', color: colors.text }}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => handleSetFolderColor(editingFolderColor)}
+                style={{ flex: 1, padding: 16, borderRadius: 12, alignItems: 'center', backgroundColor: colors.primary }}
+              >
+                <Text style={{ fontWeight: '600', color: '#FFF' }}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       <ConfirmDialog
         visible={!!deleteFolder}
         title="Delete Folder"
@@ -455,7 +513,7 @@ export default function LibraryScreen({ navigation }: Props) {
 
       <View style={{ flex: 1, minHeight: 200 }}>
         <FlashList
-          data={(loading && !refreshing) ? [] : documents}
+          data={(isActuallyLoading && !refreshing && documents.length === 0) ? [] : documents}
           keyExtractor={item => item._id}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
           onEndReached={loadMore}
@@ -484,9 +542,9 @@ export default function LibraryScreen({ navigation }: Props) {
                 }}
               />
 
-            {loading && !refreshing && <SkeletonLoader count={5} type="list" />}
+            {isActuallyLoading && !refreshing && documents.length === 0 && folders.length === 0 && <SkeletonLoader count={5} type="list" />}
 
-            {(!loading || refreshing) && folders.length > 0 && (
+            {(!isActuallyLoading || refreshing || folders.length > 0) && folders.length > 0 && (
               <View style={{ gap: Spacing.sm }}>
                 <Text style={{ fontSize: 11, fontFamily: Typography.families.mono, fontWeight: '700', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1 }}>Folders</Text>
                 {folders.map((folder) => {
@@ -516,21 +574,17 @@ export default function LibraryScreen({ navigation }: Props) {
           </View>
         }
           renderItem={renderDocumentItem}
-          ListEmptyComponent={<EmptyLibraryState search={search} loading={loading} hasDocuments={documents.length > 0} hasFolders={folders.length > 0} />}
+          ListEmptyComponent={<EmptyLibraryState search={search} loading={isActuallyLoading} hasDocuments={documents.length > 0} hasFolders={folders.length > 0} />}
         />
       </View>
 
-      <BulkActionBar
-        selectedCount={selectedCount}
+      <BulkActionBar 
+        selectedCount={selectedCount} 
         hasOrganizedDocs={hasOrganizedDocs}
+        allDocsFailed={allDocsFailed}
         onOrganizeAI={handleOrganizeAI}
         onSynthesize={handleSynthesize}
-        onDownload={handleDownloadBulk}
-        onMore={() => {
-          setActionSheetMode('multi');
-          setActionSheetItem(null);
-          setActionSheetVisible(true);
-        }}
+
         onDelete={() => setBulkDeleteVisible(true)}
         onClear={() => { setSelectedDocIds([]); setSelectedFolderIds([]); }}
       />

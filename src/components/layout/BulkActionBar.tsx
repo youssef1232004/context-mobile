@@ -7,20 +7,19 @@ import { BorderRadius } from '../../theme';
 interface Props {
   selectedCount: number;
   hasOrganizedDocs?: boolean;
+  allDocsFailed?: boolean;
   onOrganizeAI: () => void;
   onSynthesize: () => void;
-  onDownload?: () => void;
-  onMore?: () => void;
   onDelete: () => void;
   onClear: () => void;
 }
 
-export const BulkActionBar: React.FC<Props> = ({ selectedCount, hasOrganizedDocs = false, onOrganizeAI, onSynthesize, onDownload, onMore, onDelete, onClear }) => {
+export const BulkActionBar: React.FC<Props> = ({ selectedCount, hasOrganizedDocs = false, allDocsFailed = false, onOrganizeAI, onSynthesize, onDelete, onClear }) => {
   const { isDark } = useTheme();
   if (selectedCount === 0) return null;
 
-  const showSynthesize = selectedCount >= 2;
-  const shouldShowOrganize = !hasOrganizedDocs;
+  const showSynthesize = selectedCount >= 2 && !allDocsFailed;
+  const shouldShowOrganize = !hasOrganizedDocs && !allDocsFailed;
 
   // The BulkActionBar uses an INVERTED theme for high contrast (Dark bar in Light mode, Light bar in Dark mode)
   const barBg = isDark ? '#e0e0e6' : '#1a1a2e';
@@ -106,39 +105,7 @@ export const BulkActionBar: React.FC<Props> = ({ selectedCount, hasOrganizedDocs
           </TouchableOpacity>
         )}
 
-        {onDownload && (
-          <TouchableOpacity 
-            onPress={onDownload} 
-            activeOpacity={0.7}
-            style={{ 
-              flexDirection: 'row', alignItems: 'center', gap: 4, 
-              paddingHorizontal: 10, paddingVertical: 6, 
-              backgroundColor: isDark ? 'rgba(16,185,129,0.15)' : 'rgba(16,185,129,0.2)',
-              borderRadius: BorderRadius.full,
-              borderWidth: 1, borderColor: isDark ? 'rgba(16,185,129,0.3)' : 'rgba(16,185,129,0.3)',
-            }}
-          >
-            <Ionicons name="download-outline" size={14} color={isDark ? '#10b981' : '#059669'} />
-            <Text style={{ fontSize: 11, fontWeight: '700', color: isDark ? '#10b981' : '#059669' }}>Download</Text>
-          </TouchableOpacity>
-        )}
 
-        {onMore && (
-          <TouchableOpacity 
-            onPress={onMore} 
-            activeOpacity={0.7}
-            style={{ 
-              flexDirection: 'row', alignItems: 'center', gap: 4, 
-              paddingHorizontal: 10, paddingVertical: 6, 
-              backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
-              borderRadius: BorderRadius.full,
-              borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.1)',
-            }}
-          >
-            <Ionicons name="ellipsis-horizontal" size={14} color={textColor} />
-            <Text style={{ fontSize: 11, fontWeight: '700', color: textColor }}>More</Text>
-          </TouchableOpacity>
-        )}
       </ScrollView>
 
       {/* Pinned Right: destructive actions */}

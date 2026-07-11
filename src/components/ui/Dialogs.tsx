@@ -23,12 +23,13 @@ export interface SmartActionSheetProps {
   onSynthesizeAI?: () => void;
   onDownloadFolder?: () => void;
   onSetFolderColor?: () => void;
+  onRetryAnalysis?: () => void;
 }
 
 export const SmartActionSheet: React.FC<SmartActionSheetProps> = ({
   visible, mode, item, selectedCount, onClose,
   onOpenReader, onOpenFolder, onShare, onDownload, onMove, onCopy, onRename, onDelete,
-  onOrganizeAI, onSynthesizeAI, onDownloadFolder, onSetFolderColor
+  onOrganizeAI, onSynthesizeAI, onDownloadFolder, onSetFolderColor, onRetryAnalysis
 }) => {
   const { colors, isDark } = useTheme();
   if (!visible) return null;
@@ -43,8 +44,13 @@ export const SmartActionSheet: React.FC<SmartActionSheetProps> = ({
       { icon: 'share-outline', label: 'Share', color: colors.text, onPress: onShare },
       { icon: 'download-outline', label: 'Download', color: colors.text, onPress: onDownload },
     ]);
-    if (!doc.isOrganized) {
-       actionGroups.push([{ icon: 'sparkles', label: 'Organize with AI', color: '#8b5cf6', onPress: onOrganizeAI }]);
+    // Organize shown only when NOT failed
+    if (doc.aiStatus !== 'Failed') {
+      actionGroups.push([{ icon: 'sparkles', label: doc.isOrganized ? 'Re-Organize with AI' : 'Organize with AI', color: '#8b5cf6', onPress: onOrganizeAI }]);
+    }
+    // Retry Analysis only shown when analysis failed
+    if (doc.aiStatus === 'Failed') {
+      actionGroups.push([{ icon: 'refresh', label: 'Retry Analysis', color: '#f59e0b', onPress: onRetryAnalysis }]);
     }
     actionGroups.push([
       { icon: 'folder-open-outline', label: 'Move to...', color: colors.text, onPress: onMove },
@@ -71,6 +77,18 @@ export const SmartActionSheet: React.FC<SmartActionSheetProps> = ({
     ]);
     actionGroups.push([
       { icon: 'trash-outline', label: 'Delete', color: '#ef4444', onPress: onDelete, danger: true },
+    ]);
+  } else if (mode === 'multi') {
+    actionGroups.push([
+      { icon: 'sparkles', label: 'Organize with AI', color: '#8b5cf6', onPress: onOrganizeAI },
+      { icon: 'flask-outline', label: 'Synthesize AI', color: '#8b5cf6', onPress: onSynthesizeAI },
+    ]);
+    actionGroups.push([
+      { icon: 'folder-open-outline', label: 'Move to...', color: colors.text, onPress: onMove },
+      { icon: 'copy-outline', label: 'Copy to...', color: colors.text, onPress: onCopy },
+    ]);
+    actionGroups.push([
+      { icon: 'trash-outline', label: 'Delete All', color: '#ef4444', onPress: onDelete, danger: true },
     ]);
   }
 

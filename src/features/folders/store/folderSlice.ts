@@ -1,6 +1,7 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { folderService, type FolderData, type FolderContentsResponse } from '../api/folderService';
 import { documentService, type Document } from '../../documents/api/documentService';
+import { savePersistentLibraryCache } from '../../../hooks/useLibraryCache';
 
 interface FolderState {
   currentFolder: FolderData | null;
@@ -70,7 +71,20 @@ export const fetchFolderContents = createAsyncThunk(
   async (params: { folderId?: string; search?: string; sortBy?: string; sortOrder?: string; page?: number; limit?: number } | undefined, { rejectWithValue }) => {
     try {
       const response = await folderService.getContents(params);
-      return { ...response, _requestPage: params?.page || 1 };
+      const data = { ...response, _requestPage: params?.page || 1 };
+      
+      // Save to persistent cache
+      if (data._requestPage === 1) {
+        savePersistentLibraryCache(params || {}, {
+          currentFolder: data.data?.currentFolder || null,
+          breadcrumbs: data.data?.breadcrumbs || [],
+          folders: data.data?.folders || [],
+          documents: data.data?.documents || [],
+          pagination: data.pagination || null
+        });
+      }
+      
+      return data;
     } catch (e: any) {
       return rejectWithValue(e?.response?.data?.message || 'Failed to fetch folder contents');
     }
@@ -147,6 +161,27 @@ const folderSlice = createSlice({
       state.folders = [];
       state.documents = [];
     },
+    hydrateFolderCache: (state, action: PayloadAction<{ cacheKey: string; data: any }>) => {
+      const { cacheKey, data } = action.payload;
+      state.folderCache[cacheKey] = {
+        currentFolder: data.currentFolder || null,
+        breadcrumbs: data.breadcrumbs || [],
+        folders: data.folders || [],
+        documents: data.documents || [],
+        pagination: data.pagination || null,
+        timestamp: Date.now()
+      };
+      
+      // If the currently requested key matches the hydrated cache key, apply it instantly
+      const currentCacheKey = generateCacheKey(state.lastFetchParams);
+      if (cacheKey === currentCacheKey) {
+        state.currentFolder = data.currentFolder || null;
+        state.breadcrumbs = data.breadcrumbs || [];
+        state.folders = data.folders || [];
+        state.documents = data.documents || [];
+        state.pagination = data.pagination || null;
+      }
+    },
     updateDocumentStatus: (state, action: PayloadAction<{ id: string; status: any }>) => {
       const doc = state.documents.find(d => d._id === action.payload.id);
       if (doc) {
@@ -173,6 +208,10 @@ const folderSlice = createSlice({
       .addCase(fetchFolderContents.pending, (state, action) => {
         const p = action.meta.arg || {};
         
+        const targetFolderId = p.folderId || 'root';
+        const isContextChange = 
+          targetFolderId !== (state.currentFolder?._id || 'root');
+
         state.lastFetchParams = {
           folderId: p.folderId,
           search: p.search,
@@ -187,11 +226,6 @@ const folderSlice = createSlice({
         const CACHE_TTL_MS = 60_000;
         const isCacheValid = cached && (Date.now() - cached.timestamp) < CACHE_TTL_MS;
 
-        const targetFolderId = p.folderId || 'root';
-        const isContextChange = 
-          targetFolderId !== (state.currentFolder?._id || 'root') ||
-          (p.search || '') !== (state.lastFetchParams?.search || '');
-
         if (isCacheValid) {
           if (!p.page || p.page === 1) {
             state.currentFolder = cached.currentFolder;
@@ -204,7 +238,8 @@ const folderSlice = createSlice({
           state.isRevalidating = true;
           state.error = null;
         } else if (isContextChange) {
-          state.currentFolder = null;
+          // Pre-set the currentFolder to route useLibraryCache to the right async cache key
+          state.currentFolder = p.folderId ? { _id: p.folderId } as any : null;
           state.breadcrumbs = [];
           state.folders = [];
           state.documents = [];
@@ -218,7 +253,28 @@ const folderSlice = createSlice({
       .addCase(fetchFolderContents.fulfilled, (state, action) => {
         state.loading = false;
         state.isRevalidating = false;
+        
+        const p = action.meta.arg || {};
         const { data, pagination, _requestPage } = action.payload as any;
+
+        const requestedFolderId = p.folderId || 'root';
+        const latestFolderId = state.lastFetchParams?.folderId || 'root';
+        const cacheKey = generateCacheKey(p);
+
+        if (!state.folderCache) state.folderCache = {};
+        
+        // Always save to cache
+        state.folderCache[cacheKey] = {
+          currentFolder: data.currentFolder,
+          breadcrumbs: data.breadcrumbs,
+          folders: data.folders,
+          documents: data.documents,
+          pagination: pagination || null,
+          timestamp: Date.now()
+        };
+
+        // Ignore out-of-order responses for current view
+        if (requestedFolderId !== latestFolderId) return;
         
         state.currentFolder = data.currentFolder;
         state.breadcrumbs = data.breadcrumbs;
@@ -233,24 +289,11 @@ const folderSlice = createSlice({
           state.documents = data.documents;
         }
         state.pagination = pagination || null;
-
-        const p = action.meta.arg || {};
-        const cacheKey = generateCacheKey(p);
-        if (!state.folderCache) state.folderCache = {};
-        
-        state.folderCache[cacheKey] = {
-          currentFolder: data.currentFolder,
-          breadcrumbs: data.breadcrumbs,
-          folders: data.folders,
-          documents: data.documents,
-          pagination: pagination || null,
-          timestamp: Date.now()
-        };
       })
       .addCase(fetchFolderContents.rejected, (state, action) => {
         state.loading = false;
         state.isRevalidating = false;
-        state.error = action.payload as string;
+        state.error = action.error.message || 'Failed to fetch contents';
       })
       .addCase(fetchFolderTree.fulfilled, (state, action) => {
         state.tree = action.payload;
@@ -271,5 +314,7 @@ const folderSlice = createSlice({
   },
 });
 
-export const { clearFolderData, updateDocumentStatus, updateDocumentStatuses } = folderSlice.actions;
+export const { clearFolderData, hydrateFolderCache, updateDocumentStatus, updateDocumentStatuses } = folderSlice.actions;
+
+export { generateCacheKey };
 export default folderSlice.reducer;

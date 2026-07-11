@@ -53,7 +53,7 @@ export function HistorySidebar({
               maxHeight: '95%',
               backgroundColor: isDark ? '#0f0f11' : '#fff',
               borderTopLeftRadius: 24, borderTopRightRadius: 24,
-              padding: Spacing.xl,
+              padding: Spacing.lg,
               shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.15, shadowRadius: 16, elevation: 20,
             }}>
               <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: isDark ? 'rgba(255,255,255,0.15)' : '#e0e0e0', alignSelf: 'center', marginBottom: Spacing.lg }} />
@@ -154,7 +154,7 @@ export function HistorySidebar({
                         >
                           <Ionicons name="git-compare-outline" size={18} color={colors.textSecondary} />
                           <View style={{ flex: 1 }}>
-                            <Text style={{ color: colors.text, fontWeight: '600', fontSize: Typography.sizes.sm }} numberOfLines={1}>
+                            <Text style={{ color: colors.text, fontWeight: '600', fontSize: Typography.sizes.sm }}>
                               {displayName}
                             </Text>
                             {h.createdAt && (

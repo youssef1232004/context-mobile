@@ -7,13 +7,16 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": false,
+    "backgroundColor": "#000000",
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/transparent-splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#0D0D14"
+      "backgroundColor": "#000000"
     },
     "ios": {
       "supportsTablet": true,
+      "bundleIdentifier": "com.alimo200.mobile",
+      "googleServicesFile": "./ios/GoogleService-Info.plist",
       "infoPlist": {
         "UIBackgroundModes": [
           "remote-notification"
@@ -22,10 +25,10 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#0D0D14"
+        "foregroundImage": "./assets/icon-foreground.png",
+        "backgroundColor": "#000000"
       },
-      "edgeToEdgeEnabled": true,
+      "googleServicesFile": "./google-services.json",
       "versionCode": 1,
       "permissions": [
         "android.permission.READ_EXTERNAL_STORAGE",
@@ -46,7 +49,10 @@
           "icon": "./assets/icon.png",
           "color": "#ffffff"
         }
-      ]
+      ],
+      "@react-native-firebase/app",
+      "@react-native-firebase/messaging",
+      "./withFirebaseManifest.js"
     ]
   }
 }

@@ -113,7 +113,7 @@ export default function ReadingScreen({ route, navigation }: Props) {
 
   const handleShare = async () => {
     if (!doc?.cloudinaryUrl) {
-      try { await Share.share({ message: `Check out "${doc?.title}" on Context` }); } catch {}
+      try { await Share.share({ message: `Check out "${doc?.title}" on Context` }); } catch { }
       return;
     }
     try {
